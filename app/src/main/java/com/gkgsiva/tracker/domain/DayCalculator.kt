@@ -21,7 +21,7 @@ data class DaySummary(
     val breaks: Duration,
     val breakCount: Int,
     val remaining: Duration,
-    /** Break time still available; negative when the allowance is exceeded. */
+    /** Break time left in the 1h guideline; negative when over. A longer break isn't LOP by itself. */
     val breakLeft: Duration,
     /** Earliest time you can leave and satisfy both the 8h and 5 PM rules (live days only). */
     val expectedLeave: LocalTime?,

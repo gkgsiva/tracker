@@ -98,8 +98,7 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerView
                 "Break",
                 summary.breaks.formatHm(),
                 Modifier.weight(1f),
-                sub = if (summary.breakExceeded) "${summary.breakLeft.negated().formatHm()} over" else "${summary.breakLeft.formatHm()} left",
-                warn = summary.breakExceeded,
+                sub = if (summary.breakExceeded) "${summary.breakLeft.negated().formatHm()} over 1h" else "${summary.breakLeft.formatHm()} of 1h left",
             )
             StatTile("To go", summary.remaining.formatHm(), Modifier.weight(1f), sub = "of 8h")
         }
@@ -206,7 +205,7 @@ private fun StatusCard(s: DaySummary, live: Boolean) {
             if (s.status == DayStatus.ON_BREAK) {
                 Text(
                     "Total break so far: ${s.breaks.formatHms()}",
-                    color = if (s.breakExceeded) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary,
+                    color = MaterialTheme.colorScheme.tertiary,
                     fontFamily = FontFamily.Monospace,
                 )
             }
@@ -257,7 +256,7 @@ private fun DetailsCard(s: DaySummary) {
                 warn = s.lateArrival,
             )
             DetailLine("Breaks taken", "${s.breakCount}")
-            s.returnBy?.let { DetailLine("Return from break by", it.formatClock()) }
+            s.returnBy?.let { DetailLine("Back by (to stay within 1h)", it.formatClock()) }
             s.expectedLeave?.let { DetailLine("You can leave at", it.formatClock()) }
             if (s.status == DayStatus.DONE && s.lastOut != null) {
                 DetailLine(

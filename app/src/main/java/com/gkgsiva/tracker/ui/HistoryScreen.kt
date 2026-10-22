@@ -195,7 +195,7 @@ private fun Total(label: String, value: String, modifier: Modifier, warn: Boolea
 
 @Composable
 private fun DayRow(s: DaySummary) {
-    val flags = s.lopReasons.map { it.shortLabel() } + if (s.breakExceeded) listOf("long break") else emptyList()
+    val flags = s.lopReasons.map { it.shortLabel() }
     Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row {
             Text(s.date.format(dayRowFormat), Modifier.weight(1f), fontWeight = FontWeight.Medium)

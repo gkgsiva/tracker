@@ -4,7 +4,7 @@ A small Android app for tracking office hours under these rules:
 
 - Log in before **9:00 AM**, leave after **5:00 PM**
 - **8 hours** inside the office every day
-- Up to **1 hour** of total break time
+- About **1 hour** of total break time (a longer break is fine as long as the rules above are met)
 
 Breaking any one of the first three rules makes the day **LOP** (loss of pay), even with more than 8 hours
 inside: a late login, leaving before 5 PM, or less than 8 hours inside. A late login shows as LOP right away;
