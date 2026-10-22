@@ -16,6 +16,7 @@ class DayCalculatorTest {
     private fun t(h: Int, m: Int) = LocalTime.of(h, m)
     private fun inAt(h: Int, m: Int) = Punch(t(h, m), isIn = true)
     private fun outAt(h: Int, m: Int) = Punch(t(h, m), isIn = false)
+    private fun logoutAt(h: Int, m: Int) = Punch(t(h, m), isIn = false, isLogout = true)
 
     @Test
     fun noPunchesIsNotStarted() {
@@ -67,14 +68,29 @@ class DayCalculatorTest {
     }
 
     @Test
-    fun checkoutAfterTargetMetEndsTheDay() {
-        val punches = listOf(inAt(8, 0), outAt(12, 0), inAt(12, 30), outAt(17, 0))
+    fun logoutEndsTheDay() {
+        val punches = listOf(inAt(8, 0), outAt(12, 0), inAt(12, 30), logoutAt(17, 0))
         val s = DayCalculator.summarize(day, punches, now = t(18, 0))
         assertEquals(DayStatus.DONE, s.status)
         assertEquals(Duration.ofMinutes(30), s.breaks)
         assertEquals(Duration.ofMinutes(510), s.inside)
         assertTrue(s.targetMet)
         assertFalse(s.earlyLeave)
+    }
+
+    @Test
+    fun breakAfter8HoursIsStillABreakUntilLogout() {
+        val punches = listOf(inAt(8, 0), outAt(16, 30))
+        val s = DayCalculator.summarize(day, punches, now = t(16, 45))
+        assertEquals(DayStatus.ON_BREAK, s.status)
+        assertEquals(Duration.ofMinutes(15), s.breaks)
+    }
+
+    @Test
+    fun earlyLogoutIsLopLive() {
+        val s = DayCalculator.summarize(day, listOf(inAt(8, 0), logoutAt(16, 30)), now = t(16, 45))
+        assertEquals(DayStatus.DONE, s.status)
+        assertEquals(listOf(LopReason.EARLY_EXIT), s.lopReasons)
     }
 
     @Test

@@ -4,8 +4,11 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 
-/** A single check-in (isIn = true) or check-out on some day. */
-data class Punch(val time: LocalTime, val isIn: Boolean)
+/**
+ * A single check-in (isIn = true) or check-out on some day. A check-out with [isLogout] ends the
+ * day; any other check-out starts a break.
+ */
+data class Punch(val time: LocalTime, val isIn: Boolean, val isLogout: Boolean = false)
 
 enum class DayStatus { NOT_STARTED, INSIDE, ON_BREAK, DONE, MISSING_CHECKOUT }
 
@@ -57,8 +60,8 @@ object DayCalculator {
      * check-in or an ongoing break keeps counting live.
      *
      * A day starts with the first check-in. Each check-out followed by a check-in is a break.
-     * A trailing check-out on today is treated as an ongoing break until the 8h target is met,
-     * after which it's treated as leaving for the day.
+     * On today, a trailing break check-out is an ongoing break and a logout ends the day. On past
+     * days any trailing check-out counts as leaving.
      */
     fun summarize(date: LocalDate, punches: List<Punch>, now: LocalTime?, rules: Rules = Rules()): DaySummary {
         var inside = Duration.ZERO
@@ -68,6 +71,7 @@ object DayCalculator {
         var lastOut: LocalTime? = null
         var inSince: LocalTime? = null
         var outSince: LocalTime? = null
+        var loggedOut = false
 
         for (p in punches.sortedBy { it.time }) {
             if (p.isIn) {
@@ -86,6 +90,7 @@ object DayCalculator {
                 lastOut = p.time
                 inSince = null
                 outSince = p.time
+                loggedOut = p.isLogout
             }
         }
 
@@ -97,7 +102,7 @@ object DayCalculator {
                 if (now!! > inSince) inside += Duration.between(inSince, now)
                 DayStatus.INSIDE
             }
-            now != null && outSince != null && inside < rules.requiredInside -> {
+            now != null && outSince != null && !loggedOut -> {
                 if (now > outSince) breaks += Duration.between(outSince, now)
                 breakCount++
                 val left = rules.breakAllowance - breaks

@@ -31,12 +31,12 @@ fun LopReason.shortLabel(): String = when (this) {
     LopReason.LATE_LOGIN -> "late login"
     LopReason.EARLY_EXIT -> "left early"
     LopReason.UNDER_8H -> "under 8h"
-    LopReason.MISSING_CHECKOUT -> "no check-out"
+    LopReason.MISSING_CHECKOUT -> "no logout"
 }
 
 fun LopReason.describe(s: DaySummary): String = when (this) {
     LopReason.LATE_LOGIN -> "Logged in at ${s.firstIn?.formatClock()}, after ${s.rules.arriveBy.formatClock()}"
     LopReason.EARLY_EXIT -> "Left at ${s.lastOut?.formatClock()}, before ${s.rules.leaveAfter.formatClock()}"
     LopReason.UNDER_8H -> "Only ${s.inside.formatHm()} inside, 8h required"
-    LopReason.MISSING_CHECKOUT -> "No check-out recorded"
+    LopReason.MISSING_CHECKOUT -> "No logout recorded"
 }

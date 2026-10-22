@@ -1,5 +1,7 @@
 package com.gkgsiva.tracker.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,7 +28,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -54,6 +55,26 @@ import java.time.format.DateTimeFormatter
 
 private val dateFormat = DateTimeFormatter.ofPattern("EEE, d MMM yyyy")
 
+/** What a punch means to the user. Stored as isIn + isLogout. */
+private enum class EntryKind(val label: String, val isIn: Boolean, val isLogout: Boolean) {
+    IN("Login / break end", true, false),
+    BREAK("Break start", false, false),
+    LOGOUT("Logout", false, true),
+}
+
+private val PunchEntity.kind: EntryKind
+    get() = when {
+        isIn -> EntryKind.IN
+        isLogout -> EntryKind.LOGOUT
+        else -> EntryKind.BREAK
+    }
+
+private fun PunchEntity.label(isFirst: Boolean): String = when (kind) {
+    EntryKind.IN -> if (isFirst) "Login" else "Break end"
+    EntryKind.BREAK -> "Break start"
+    EntryKind.LOGOUT -> "Logout"
+}
+
 @Composable
 fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerViewModel) {
     val now by rememberNow()
@@ -67,6 +88,13 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerView
     var editing by remember { mutableStateOf<PunchEntity?>(null) }
     var adding by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<PunchEntity?>(null) }
+    var confirmLogout by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    /** Logs out, asking first when doing it now would make the day LOP. */
+    fun logout(action: () -> Unit) {
+        val t = now.toLocalTime()
+        if (t < summary.rules.leaveAfter || !summary.targetMet) confirmLogout = action else action()
+    }
 
     Column(
         Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
@@ -90,6 +118,18 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerView
         }
 
         StatusCard(summary, live = isToday)
+
+        if (isToday) {
+            ActionButtons(
+                status = summary.status,
+                onLogin = { vm.punchNow(isIn = true) },
+                onBreakStart = { vm.punchNow(isIn = false) },
+                onBreakEnd = { vm.punchNow(isIn = true) },
+                onLogout = { logout { vm.punchNow(isIn = false, isLogout = true) } },
+                onLeftDuringBreak = { punches.lastOrNull()?.let { last -> logout { vm.convertToLogout(last) } } },
+            )
+        }
+
         LopCard(summary)
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -104,25 +144,6 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerView
         }
 
         DetailsCard(summary)
-
-        if (isToday) {
-            val nextIsIn = summary.status != DayStatus.INSIDE
-            Button(
-                onClick = { vm.punchNow(isIn = nextIsIn) },
-                modifier = Modifier.fillMaxWidth().height(64.dp),
-                colors = if (nextIsIn) ButtonDefaults.buttonColors()
-                else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
-            ) {
-                Text(
-                    when {
-                        summary.status == DayStatus.NOT_STARTED -> "Log in for the day"
-                        nextIsIn -> "Check in"
-                        else -> "Check out"
-                    },
-                    style = MaterialTheme.typography.titleLarge,
-                )
-            }
-        }
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(vertical = 8.dp)) {
@@ -150,20 +171,24 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerView
     }
 
     if (adding) {
-        val lastIsIn = punches.lastOrNull()?.isIn ?: false
+        val last = punches.lastOrNull()
         PunchDialog(
             title = "Add entry",
             initialTime = if (isToday) now.toLocalTime() else LocalTime.of(9, 0),
-            initialIsIn = !lastIsIn,
+            initialKind = when {
+                last == null || !last.isIn -> EntryKind.IN
+                isToday -> EntryKind.BREAK
+                else -> EntryKind.LOGOUT
+            },
             onDismiss = { adding = false },
-            onConfirm = { time, isIn -> vm.add(date, time, isIn); adding = false },
+            onConfirm = { time, kind -> vm.add(date, time, kind.isIn, kind.isLogout); adding = false },
         )
     }
     deleting?.let { p ->
         AlertDialog(
             onDismissRequest = { deleting = null },
             title = { Text("Delete entry?") },
-            text = { Text("${if (p.isIn) "Check in" else "Check out"} at ${p.time.formatClock()}") },
+            text = { Text("${p.label(isFirst = p == punches.firstOrNull())} at ${p.time.formatClock()}") },
             confirmButton = { TextButton(onClick = { vm.delete(p); deleting = null }) { Text("Delete") } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
         )
@@ -172,42 +197,120 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerView
         PunchDialog(
             title = "Edit entry",
             initialTime = p.time,
-            initialIsIn = p.isIn,
+            initialKind = p.kind,
             onDismiss = { editing = null },
-            onConfirm = { time, isIn -> vm.update(p, time, isIn); editing = null },
+            onConfirm = { time, kind -> vm.update(p, time, kind.isIn, kind.isLogout); editing = null },
+        )
+    }
+    confirmLogout?.let { action ->
+        AlertDialog(
+            onDismissRequest = { confirmLogout = null },
+            title = { Text("Log out for the day?") },
+            text = {
+                Text(
+                    buildString {
+                        append("Logging out now will make today LOP")
+                        val reasons = buildList {
+                            if (now.toLocalTime() < summary.rules.leaveAfter) add("it's before ${summary.rules.leaveAfter.formatClock()}")
+                            if (!summary.targetMet) add("you still need ${summary.remaining.formatHm()} inside")
+                        }
+                        append(": ").append(reasons.joinToString(" and ")).append('.')
+                    }
+                )
+            },
+            confirmButton = { TextButton(onClick = { action(); confirmLogout = null }) { Text("Log out") } },
+            dismissButton = { TextButton(onClick = { confirmLogout = null }) { Text("Cancel") } },
         )
     }
 }
 
 @Composable
+private fun ActionButtons(
+    status: DayStatus,
+    onLogin: () -> Unit,
+    onBreakStart: () -> Unit,
+    onBreakEnd: () -> Unit,
+    onLogout: () -> Unit,
+    onLeftDuringBreak: () -> Unit,
+) {
+    val big = Modifier.height(64.dp)
+    val tertiary = ButtonDefaults.buttonColors(
+        containerColor = MaterialTheme.colorScheme.tertiary,
+        contentColor = MaterialTheme.colorScheme.onTertiary,
+    )
+    when (status) {
+        DayStatus.NOT_STARTED -> Button(onClick = onLogin, modifier = big.fillMaxWidth()) {
+            Text("Log in", style = MaterialTheme.typography.titleLarge)
+        }
+        DayStatus.INSIDE -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(onClick = onBreakStart, modifier = big.weight(1f), colors = tertiary) {
+                Text("Start break", style = MaterialTheme.typography.titleMedium)
+            }
+            OutlinedButton(onClick = onLogout, modifier = big.weight(1f)) {
+                Text("Log out", style = MaterialTheme.typography.titleMedium)
+            }
+        }
+        DayStatus.ON_BREAK -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Button(onClick = onBreakEnd, modifier = big.fillMaxWidth()) {
+                Text("End break", style = MaterialTheme.typography.titleLarge)
+            }
+            TextButton(onClick = onLeftDuringBreak) { Text("I've left for the day") }
+        }
+        DayStatus.DONE, DayStatus.MISSING_CHECKOUT -> OutlinedButton(onClick = onLogin, modifier = Modifier.fillMaxWidth()) {
+            Text("Log in again")
+        }
+    }
+}
+
+@Composable
 private fun StatusCard(s: DaySummary, live: Boolean) {
-    val (label, color) = when (s.status) {
+    val (label, target) = when (s.status) {
         DayStatus.NOT_STARTED -> (if (live) "Not logged in yet" else "No entries") to MaterialTheme.colorScheme.onSurfaceVariant
         DayStatus.INSIDE -> "Inside office" to MaterialTheme.colorScheme.primary
         DayStatus.ON_BREAK -> "On break" to MaterialTheme.colorScheme.tertiary
-        DayStatus.DONE -> (if (s.lop) "Day complete · LOP" else "Day complete") to
+        DayStatus.DONE -> (if (s.lop) "Logged out · LOP" else "Day complete") to
             (if (s.lop) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
-        DayStatus.MISSING_CHECKOUT -> "Missing check-out" to MaterialTheme.colorScheme.error
+        DayStatus.MISSING_CHECKOUT -> "Missing logout" to MaterialTheme.colorScheme.error
     }
+    val color by animateColorAsState(target, tween(600), label = "status")
+    val progress = s.inside.seconds / s.rules.requiredInside.seconds.toFloat()
+
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(label, style = MaterialTheme.typography.titleMedium, color = color, fontWeight = FontWeight.SemiBold)
-            Text(
-                s.inside.formatHms(),
-                style = MaterialTheme.typography.displayMedium,
-                fontFamily = FontFamily.Monospace,
-            )
-            Text("inside office of 8h required", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            LinearProgressIndicator(
-                progress = { (s.inside.seconds / s.rules.requiredInside.seconds.toFloat()).coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth().height(8.dp),
-            )
+        Column(
+            Modifier.fillMaxWidth().padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (live && (s.status == DayStatus.INSIDE || s.status == DayStatus.ON_BREAK)) PulsingDot(color)
+                Text(label, style = MaterialTheme.typography.titleMedium, color = color, fontWeight = FontWeight.SemiBold)
+            }
+            ProgressRing(progress = progress, color = color, trackColor = MaterialTheme.colorScheme.surfaceVariant) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    RollingText(
+                        s.inside.formatHms(),
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                    )
+                    Text("inside of 8h", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "${(progress * 100).toInt().coerceAtMost(999)}%",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = color,
+                    )
+                }
+            }
             if (s.status == DayStatus.ON_BREAK) {
-                Text(
-                    "Total break so far: ${s.breaks.formatHms()}",
-                    color = MaterialTheme.colorScheme.tertiary,
-                    fontFamily = FontFamily.Monospace,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Total break  ", color = MaterialTheme.colorScheme.tertiary)
+                    RollingText(
+                        s.breaks.formatHms(),
+                        style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Monospace),
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
             }
         }
     }
@@ -231,15 +334,11 @@ private fun LopCard(s: DaySummary) {
 }
 
 @Composable
-private fun StatTile(title: String, value: String, modifier: Modifier, sub: String? = null, warn: Boolean = false) {
-    Card(
-        modifier,
-        colors = if (warn) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-        else CardDefaults.cardColors(),
-    ) {
+private fun StatTile(title: String, value: String, modifier: Modifier, sub: String? = null) {
+    Card(modifier) {
         Column(Modifier.padding(12.dp)) {
             Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            RollingText(value, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold))
             if (sub != null) Text(sub, style = MaterialTheme.typography.bodySmall)
         }
     }
@@ -260,13 +359,13 @@ private fun DetailsCard(s: DaySummary) {
             s.expectedLeave?.let { DetailLine("You can leave at", it.formatClock()) }
             if (s.status == DayStatus.DONE && s.lastOut != null) {
                 DetailLine(
-                    "Left at",
+                    "Logged out at",
                     s.lastOut.formatClock() + if (s.earlyLeave) "  (before ${s.rules.leaveAfter.formatClock()})" else "",
                     warn = s.earlyLeave,
                 )
             }
             if (s.status == DayStatus.MISSING_CHECKOUT) {
-                Text("Add the check-out time to count this day.", color = MaterialTheme.colorScheme.error)
+                Text("Add the logout time to count this day.", color = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -289,13 +388,13 @@ private fun PunchRow(p: PunchEntity, isFirst: Boolean, onEdit: () -> Unit, onDel
     Row(Modifier.padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(p.time.formatClock(), Modifier.width(96.dp), fontWeight = FontWeight.Medium)
         Text(
-            when {
-                isFirst && p.isIn -> "Login"
-                p.isIn -> "Check in"
-                else -> "Check out"
-            },
+            p.label(isFirst),
             Modifier.weight(1f),
-            color = if (p.isIn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+            color = when (p.kind) {
+                EntryKind.IN -> MaterialTheme.colorScheme.primary
+                EntryKind.BREAK -> MaterialTheme.colorScheme.tertiary
+                EntryKind.LOGOUT -> MaterialTheme.colorScheme.onSurface
+            },
         )
         IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit") }
         IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete") }
@@ -307,27 +406,32 @@ private fun PunchRow(p: PunchEntity, isFirst: Boolean, onEdit: () -> Unit, onDel
 private fun PunchDialog(
     title: String,
     initialTime: LocalTime,
-    initialIsIn: Boolean,
+    initialKind: EntryKind,
     onDismiss: () -> Unit,
-    onConfirm: (LocalTime, Boolean) -> Unit,
+    onConfirm: (LocalTime, EntryKind) -> Unit,
 ) {
     val state = rememberTimePickerState(initialTime.hour, initialTime.minute, is24Hour = false)
-    var isIn by remember { mutableStateOf(initialIsIn) }
+    var kind by remember { mutableStateOf(initialKind) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = isIn, onClick = { isIn = true }, label = { Text("Check in") })
-                    FilterChip(selected = !isIn, onClick = { isIn = false }, label = { Text("Check out") })
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    EntryKind.entries.forEach { k ->
+                        FilterChip(
+                            selected = kind == k,
+                            onClick = { kind = k },
+                            label = { Text(if (k == EntryKind.IN) "In" else k.label) },
+                        )
+                    }
                 }
                 Spacer(Modifier.height(12.dp))
                 TimePicker(state = state)
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(LocalTime.of(state.hour, state.minute), isIn) }) { Text("Save") }
+            TextButton(onClick = { onConfirm(LocalTime.of(state.hour, state.minute), kind) }) { Text("Save") }
         },
         dismissButton = { OutlinedButton(onClick = onDismiss) { Text("Cancel") } },
     )

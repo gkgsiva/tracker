@@ -12,8 +12,9 @@ the other two once the day is over.
 
 ## How it works
 
-Each day starts with your first login. After that, every **Check out** / **Check in** pair is a break.
-The Today screen updates every second and shows:
+Tap **Log in** when you arrive. After that you get **Start break** / **End break** for each break and
+**Log out** when you leave for the day (it warns you first if logging out now would make the day LOP).
+The Today screen updates every second, with an animated progress ring and rolling digits, and shows:
 
 - time spent inside the office, with progress toward 8h
 - total break time (including the break you're on right now) and how much allowance is left

@@ -22,18 +22,30 @@ class TrackerViewModel(app: Application) : AndroidViewModel(app) {
         .map { all -> all.groupBy { it.date } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
-    /** Records a check-in or check-out right now. */
-    fun punchNow(isIn: Boolean) {
+    /** Records a login/break end (isIn), break start or logout right now. */
+    fun punchNow(isIn: Boolean, isLogout: Boolean = false) {
         val now = LocalDateTime.now().withNano(0)
-        add(now.toLocalDate(), now.toLocalTime(), isIn)
+        add(now.toLocalDate(), now.toLocalTime(), isIn, isLogout)
     }
 
-    fun add(date: LocalDate, time: LocalTime, isIn: Boolean) = viewModelScope.launch {
-        dao.insert(PunchEntity(epochDay = date.toEpochDay(), secondOfDay = time.toSecondOfDay(), isIn = isIn))
+    fun add(date: LocalDate, time: LocalTime, isIn: Boolean, isLogout: Boolean) = viewModelScope.launch {
+        dao.insert(
+            PunchEntity(
+                epochDay = date.toEpochDay(),
+                secondOfDay = time.toSecondOfDay(),
+                isIn = isIn,
+                isLogout = !isIn && isLogout,
+            )
+        )
     }
 
-    fun update(punch: PunchEntity, time: LocalTime, isIn: Boolean) = viewModelScope.launch {
-        dao.update(punch.copy(secondOfDay = time.toSecondOfDay(), isIn = isIn))
+    fun update(punch: PunchEntity, time: LocalTime, isIn: Boolean, isLogout: Boolean) = viewModelScope.launch {
+        dao.update(punch.copy(secondOfDay = time.toSecondOfDay(), isIn = isIn, isLogout = !isIn && isLogout))
+    }
+
+    /** Turns the break you're on into the end of the day. */
+    fun convertToLogout(punch: PunchEntity) = viewModelScope.launch {
+        dao.update(punch.copy(isLogout = true))
     }
 
     fun delete(punch: PunchEntity) = viewModelScope.launch {

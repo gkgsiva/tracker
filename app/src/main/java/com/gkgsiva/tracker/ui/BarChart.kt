@@ -1,10 +1,15 @@
 package com.gkgsiva.tracker.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -21,7 +26,7 @@ import kotlin.math.max
 /** One bar: [inside] hours stacked under [breaks] hours; [lop] bars are drawn in the error color. */
 data class Bar(val label: String, val inside: Float, val breaks: Float, val lop: Boolean = false)
 
-/** Stacked bar chart in hours with a dashed target line. */
+/** Stacked bar chart in hours with a dashed target line. Bars grow in when the set of bars changes. */
 @Composable
 fun BarChart(bars: List<Bar>, target: Float, modifier: Modifier = Modifier) {
     val insideColor = MaterialTheme.colorScheme.primary
@@ -32,6 +37,11 @@ fun BarChart(bars: List<Bar>, target: Float, modifier: Modifier = Modifier) {
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
     val measurer = rememberTextMeasurer()
     val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor)
+    val grow = remember { Animatable(0f) }
+    LaunchedEffect(bars.map { it.label }) {
+        grow.snapTo(0f)
+        grow.animateTo(1f, tween(700, easing = FastOutSlowInEasing))
+    }
 
     Canvas(modifier.fillMaxWidth().height(220.dp)) {
         val axisWidth = 28.dp.toPx()
@@ -55,7 +65,8 @@ fun BarChart(bars: List<Bar>, target: Float, modifier: Modifier = Modifier) {
             val slot = chartWidth / bars.size
             val barWidth = slot * 0.6f
             val corner = CornerRadius(3.dp.toPx())
-            bars.forEachIndexed { i, bar ->
+            bars.forEachIndexed { i, raw ->
+                val bar = raw.copy(inside = raw.inside * grow.value, breaks = raw.breaks * grow.value)
                 val left = axisWidth + i * slot + (slot - barWidth) / 2f
                 if (bar.inside > 0f) {
                     drawRoundRect(if (bar.lop) lopColor else insideColor, Offset(left, y(bar.inside)), Size(barWidth, chartHeight - y(bar.inside)), corner)
