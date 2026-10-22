@@ -3,7 +3,9 @@ package com.gkgsiva.tracker.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.gkgsiva.tracker.data.AppDatabase
+import com.gkgsiva.tracker.data.DayEntity
 import com.gkgsiva.tracker.data.PunchEntity
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,12 +17,29 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 
 class TrackerViewModel(app: Application) : AndroidViewModel(app) {
-    private val dao = AppDatabase.get(app).punchDao()
+    private val db = AppDatabase.get(app)
+    private val dao = db.punchDao()
 
     /** All punches grouped by day. A personal tracker stays small enough to keep in memory. */
     val punchesByDay: StateFlow<Map<LocalDate, List<PunchEntity>>> = dao.observeAll()
         .map { all -> all.groupBy { it.date } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val wfhDays: StateFlow<Set<LocalDate>> = dao.observeWfhDays()
+        .map { days -> days.map(LocalDate::ofEpochDay).toSet() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    fun setWfh(date: LocalDate, wfh: Boolean) = viewModelScope.launch {
+        dao.upsertDay(DayEntity(date.toEpochDay(), wfh))
+    }
+
+    /** Deletes every entry and day setting. */
+    fun clearAll() = viewModelScope.launch {
+        db.withTransaction {
+            dao.deleteAllPunches()
+            dao.deleteAllDays()
+        }
+    }
 
     /** Records a login/break end (isIn), break start or logout right now. */
     fun punchNow(isIn: Boolean, isLogout: Boolean = false) {

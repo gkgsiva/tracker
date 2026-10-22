@@ -16,6 +16,7 @@ data class PeriodSummary(
     val lateDays: Int,
     val shortDays: Int,
     val lopDays: Int,
+    val wfhDays: Int,
 ) {
     val avgInside: Duration get() = if (daysWorked == 0) Duration.ZERO else totalInside.dividedBy(daysWorked.toLong())
     val avgBreaks: Duration get() = if (daysWorked == 0) Duration.ZERO else totalBreaks.dividedBy(daysWorked.toLong())
@@ -54,6 +55,7 @@ object Periods {
             lateDays = inRange.count { it.lateArrival },
             shortDays = inRange.count { it.finished && !it.targetMet },
             lopDays = inRange.count { it.lop },
+            wfhDays = inRange.count { it.wfh },
         )
     }
 }

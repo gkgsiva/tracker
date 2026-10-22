@@ -31,6 +31,8 @@ data class DaySummary(
     /** Latest time to come back from the current break without exceeding the allowance. */
     val returnBy: LocalTime?,
     val rules: Rules,
+    /** Work-from-home day: only first login and last logout count, no breaks. */
+    val wfh: Boolean = false,
 ) {
     val worked: Boolean get() = firstIn != null
     val targetMet: Boolean get() = inside >= rules.requiredInside
@@ -62,8 +64,16 @@ object DayCalculator {
      * A day starts with the first check-in. Each check-out followed by a check-in is a break.
      * On today, a trailing break check-out is an ongoing break and a logout ends the day. On past
      * days any trailing check-out counts as leaving.
+     *
+     * On a [wfh] day only the first login and the last check-out are used, so there are no breaks.
      */
-    fun summarize(date: LocalDate, punches: List<Punch>, now: LocalTime?, rules: Rules = Rules()): DaySummary {
+    fun summarize(
+        date: LocalDate,
+        punches: List<Punch>,
+        now: LocalTime?,
+        rules: Rules = Rules(),
+        wfh: Boolean = false,
+    ): DaySummary {
         var inside = Duration.ZERO
         var breaks = Duration.ZERO
         var breakCount = 0
@@ -73,7 +83,7 @@ object DayCalculator {
         var outSince: LocalTime? = null
         var loggedOut = false
 
-        for (p in punches.sortedBy { it.time }) {
+        for (p in if (wfh) wfhPunches(punches) else punches.sortedBy { it.time }) {
             if (p.isIn) {
                 if (inSince != null) continue
                 if (firstIn == null) {
@@ -130,6 +140,16 @@ object DayCalculator {
             expectedLeave = expectedLeave,
             returnBy = returnBy,
             rules = rules,
+            wfh = wfh,
         )
+    }
+
+    private fun wfhPunches(punches: List<Punch>): List<Punch> {
+        val sorted = punches.sortedBy { it.time }
+        val login = sorted.firstOrNull { it.isIn } ?: return emptyList()
+        val logout = sorted.lastOrNull { !it.isIn && it.time >= login.time }
+            // Logging in again after logging out means the day is still running.
+            ?.takeIf { out -> sorted.none { it.isIn && it.time > out.time } }
+        return listOfNotNull(login, logout?.copy(isLogout = true))
     }
 }

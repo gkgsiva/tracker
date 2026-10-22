@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -30,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -43,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -76,14 +79,16 @@ private fun PunchEntity.label(isFirst: Boolean): String = when (kind) {
 }
 
 @Composable
-fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerViewModel) {
+fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, wfhDays: Set<LocalDate>, vm: TrackerViewModel) {
     val now by rememberNow()
     val today = now.toLocalDate()
     var selectedEpochDay by rememberSaveable { mutableStateOf(today.toEpochDay()) }
     val date = LocalDate.ofEpochDay(selectedEpochDay)
     val isToday = date == today
     val punches = punchesByDay[date].orEmpty().sortedBy { it.secondOfDay }
-    val summary = summarizeDay(date, punches, now)
+    val context = LocalContext.current
+    val wfh = date in wfhDays
+    val summary = summarizeDay(date, punches, now, wfh)
 
     var editing by remember { mutableStateOf<PunchEntity?>(null) }
     var adding by remember { mutableStateOf(false) }
@@ -112,6 +117,9 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerView
             if (!isToday) {
                 TextButton(onClick = { selectedEpochDay = today.toEpochDay() }) { Text("Today") }
             }
+            IconButton(onClick = { shareText(context, "Office report ${date.format(dateFormat)}", Reports.day(summary)) }) {
+                Icon(Icons.Filled.Share, contentDescription = "Share report")
+            }
             IconButton(onClick = { selectedEpochDay++ }, enabled = !isToday) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next day")
             }
@@ -119,9 +127,24 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerView
 
         StatusCard(summary, live = isToday)
 
+        Card(Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Work from home", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Only first login and last logout count",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = wfh, onCheckedChange = { vm.setWfh(date, it) })
+            }
+        }
+
         if (isToday) {
             ActionButtons(
                 status = summary.status,
+                wfh = wfh,
                 onLogin = { vm.punchNow(isIn = true) },
                 onBreakStart = { vm.punchNow(isIn = false) },
                 onBreakEnd = { vm.punchNow(isIn = true) },
@@ -133,13 +156,15 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerView
         LopCard(summary)
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile("Inside", summary.inside.formatHm(), Modifier.weight(1f))
-            StatTile(
-                "Break",
-                summary.breaks.formatHm(),
-                Modifier.weight(1f),
-                sub = if (summary.breakExceeded) "${summary.breakLeft.negated().formatHm()} over 1h" else "${summary.breakLeft.formatHm()} of 1h left",
-            )
+            StatTile(if (wfh) "Worked" else "Inside", summary.inside.formatHm(), Modifier.weight(1f))
+            if (!wfh) {
+                StatTile(
+                    "Break",
+                    summary.breaks.formatHm(),
+                    Modifier.weight(1f),
+                    sub = if (summary.breakExceeded) "${summary.breakLeft.negated().formatHm()} over 1h" else "${summary.breakLeft.formatHm()} of 1h left",
+                )
+            }
             StatTile("To go", summary.remaining.formatHm(), Modifier.weight(1f), sub = "of 8h")
         }
 
@@ -177,9 +202,10 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerView
             initialTime = if (isToday) now.toLocalTime() else LocalTime.of(9, 0),
             initialKind = when {
                 last == null || !last.isIn -> EntryKind.IN
-                isToday -> EntryKind.BREAK
+                isToday && !wfh -> EntryKind.BREAK
                 else -> EntryKind.LOGOUT
             },
+            wfh = wfh,
             onDismiss = { adding = false },
             onConfirm = { time, kind -> vm.add(date, time, kind.isIn, kind.isLogout); adding = false },
         )
@@ -198,6 +224,7 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerView
             title = "Edit entry",
             initialTime = p.time,
             initialKind = p.kind,
+            wfh = wfh,
             onDismiss = { editing = null },
             onConfirm = { time, kind -> vm.update(p, time, kind.isIn, kind.isLogout); editing = null },
         )
@@ -227,6 +254,7 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerView
 @Composable
 private fun ActionButtons(
     status: DayStatus,
+    wfh: Boolean,
     onLogin: () -> Unit,
     onBreakStart: () -> Unit,
     onBreakEnd: () -> Unit,
@@ -242,7 +270,11 @@ private fun ActionButtons(
         DayStatus.NOT_STARTED -> Button(onClick = onLogin, modifier = big.fillMaxWidth()) {
             Text("Log in", style = MaterialTheme.typography.titleLarge)
         }
-        DayStatus.INSIDE -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        DayStatus.INSIDE -> if (wfh) {
+            OutlinedButton(onClick = onLogout, modifier = big.fillMaxWidth()) {
+                Text("Log out", style = MaterialTheme.typography.titleLarge)
+            }
+        } else Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = onBreakStart, modifier = big.weight(1f), colors = tertiary) {
                 Text("Start break", style = MaterialTheme.typography.titleMedium)
             }
@@ -266,7 +298,7 @@ private fun ActionButtons(
 private fun StatusCard(s: DaySummary, live: Boolean) {
     val (label, target) = when (s.status) {
         DayStatus.NOT_STARTED -> (if (live) "Not logged in yet" else "No entries") to MaterialTheme.colorScheme.onSurfaceVariant
-        DayStatus.INSIDE -> "Inside office" to MaterialTheme.colorScheme.primary
+        DayStatus.INSIDE -> (if (s.wfh) "Working from home" else "Inside office") to MaterialTheme.colorScheme.primary
         DayStatus.ON_BREAK -> "On break" to MaterialTheme.colorScheme.tertiary
         DayStatus.DONE -> (if (s.lop) "Logged out · LOP" else "Day complete") to
             (if (s.lop) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
@@ -294,7 +326,7 @@ private fun StatusCard(s: DaySummary, live: Boolean) {
                             fontWeight = FontWeight.SemiBold,
                         ),
                     )
-                    Text("inside of 8h", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (s.wfh) "worked of 8h" else "inside of 8h", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
                         "${(progress * 100).toInt().coerceAtMost(999)}%",
                         style = MaterialTheme.typography.labelLarge,
@@ -354,7 +386,7 @@ private fun DetailsCard(s: DaySummary) {
                 s.firstIn!!.formatClock() + if (s.lateArrival) "  (after ${s.rules.arriveBy.formatClock()})" else "",
                 warn = s.lateArrival,
             )
-            DetailLine("Breaks taken", "${s.breakCount}")
+            if (!s.wfh) DetailLine("Breaks taken", "${s.breakCount}")
             s.returnBy?.let { DetailLine("Back by (to stay within 1h)", it.formatClock()) }
             s.expectedLeave?.let { DetailLine("You can leave at", it.formatClock()) }
             if (s.status == DayStatus.DONE && s.lastOut != null) {
@@ -407,6 +439,7 @@ private fun PunchDialog(
     title: String,
     initialTime: LocalTime,
     initialKind: EntryKind,
+    wfh: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (LocalTime, EntryKind) -> Unit,
 ) {
@@ -418,7 +451,7 @@ private fun PunchDialog(
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    EntryKind.entries.forEach { k ->
+                    EntryKind.entries.filter { !wfh || it != EntryKind.BREAK }.forEach { k ->
                         FilterChip(
                             selected = kind == k,
                             onClick = { kind = k },

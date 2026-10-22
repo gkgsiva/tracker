@@ -25,7 +25,12 @@ Entries can be added, edited or deleted for any day, in case you forget to tap.
 The History screen shows daily (last 14 days), weekly (last 8 weeks) and monthly (last 6 months) charts
 with inside time, break time and the 8h target, plus LOP days (highlighted in red on the daily chart) and counts of late logins and days under 8h.
 
-Everything is stored locally on the phone in a Room (SQLite) database.
+Turn on **Work from home** for a day and only the first login and last logout count (no breaks); the same
+LOP rules apply. The share icon sends a text report for a day, this week or this month through any app
+(WhatsApp, email, …).
+
+Everything is stored locally on the phone in a Room (SQLite) database. **Clear all data** at the bottom of
+History deletes it after a confirmation.
 
 The rules live in `app/src/main/java/com/gkgsiva/tracker/domain/Rules.kt` if they ever change.
 

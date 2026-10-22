@@ -141,6 +141,29 @@ class DayCalculatorTest {
     }
 
     @Test
+    fun wfhUsesOnlyFirstLoginAndLastLogout() {
+        val punches = listOf(inAt(8, 30), outAt(12, 0), inAt(13, 0), logoutAt(17, 0))
+        val s = DayCalculator.summarize(day, punches, now = null, wfh = true)
+        assertEquals(Duration.ofMinutes(510), s.inside)
+        assertEquals(Duration.ZERO, s.breaks)
+        assertEquals(0, s.breakCount)
+        assertFalse(s.lop)
+        assertTrue(s.wfh)
+    }
+
+    @Test
+    fun wfhIsLiveUntilLogoutAndFollowsLopRules() {
+        val live = DayCalculator.summarize(day, listOf(inAt(9, 10)), now = t(12, 0), wfh = true)
+        assertEquals(DayStatus.INSIDE, live.status)
+        assertEquals(Duration.ofMinutes(170), live.inside)
+        assertEquals(listOf(LopReason.LATE_LOGIN), live.lopReasons)
+
+        val relogin = DayCalculator.summarize(day, listOf(inAt(8, 0), logoutAt(15, 0), inAt(15, 30)), now = t(16, 0), wfh = true)
+        assertEquals(DayStatus.INSIDE, relogin.status)
+        assertEquals(Duration.ofHours(8), relogin.inside)
+    }
+
+    @Test
     fun onTimeFullDayIsNotLop() {
         val s = DayCalculator.summarize(day, listOf(inAt(8, 30), outAt(13, 0), inAt(13, 30), outAt(17, 5)), null)
         assertFalse(s.lop)

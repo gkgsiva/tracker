@@ -5,25 +5,37 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.data.PunchEntity
@@ -46,10 +58,17 @@ private const val WEEKS_SHOWN = 8
 private const val MONTHS_SHOWN = 6
 
 @Composable
-fun HistoryScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>) {
+fun HistoryScreen(
+    punchesByDay: Map<LocalDate, List<PunchEntity>>,
+    wfhDays: Set<LocalDate>,
+    onClearAll: () -> Unit,
+) {
     val now by rememberNow()
     val today = now.toLocalDate()
-    val summaries = summarizeAll(punchesByDay, now)
+    val summaries = summarizeAll(punchesByDay, wfhDays, now)
+    var confirmClear by remember { mutableStateOf(false) }
+    var sharing by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     var range by rememberSaveable { mutableIntStateOf(0) }
     val selected = Range.entries[range]
 
@@ -57,9 +76,13 @@ fun HistoryScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>) {
         Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Range.entries.forEach { r ->
                 FilterChip(selected = r == selected, onClick = { range = r.ordinal }, label = { Text(r.label) })
+            }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = { sharing = true }) {
+                Icon(Icons.Filled.Share, contentDescription = "Share report")
             }
         }
 
@@ -76,6 +99,49 @@ fun HistoryScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>) {
                 rowLabel = { it.start.format(monthRowFormat) },
             )
         }
+
+        OutlinedButton(
+            onClick = { confirmClear = true },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+        ) { Text("Clear all data") }
+    }
+
+    if (sharing) {
+        fun share(subject: String, text: String) {
+            shareText(context, subject, text)
+            sharing = false
+        }
+        AlertDialog(
+            onDismissRequest = { sharing = false },
+            title = { Text("Share report") },
+            text = {
+                Column {
+                    TextButton(onClick = {
+                        share("Office report today", Reports.day(summaries[today] ?: summarizeDay(today, emptyList(), now, today in wfhDays)))
+                    }) { Text("Today") }
+                    TextButton(onClick = { share("Office report this week", Reports.week(summaries, today)) }) { Text("This week") }
+                    TextButton(onClick = { share("Office report this month", Reports.month(summaries, today)) }) { Text("This month") }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { sharing = false }) { Text("Cancel") } },
+        )
+    }
+
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text("Delete all data?") },
+            text = { Text("This permanently deletes every login, break, logout and WFH day. It can't be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = { onClearAll(); confirmClear = false },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) { Text("Delete everything") }
+            },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } },
+        )
     }
 }
 
@@ -127,7 +193,7 @@ private fun PeriodView(
                     Text(rowLabel(p), fontWeight = FontWeight.Medium)
                     Text(
                         if (p.daysWorked == 0) "No days logged"
-                        else "${p.daysWorked} days · ${p.lopDays} LOP · ${p.totalInside.formatHm()} inside · avg ${p.avgInside.formatHm()} · avg break ${p.avgBreaks.formatHm()}",
+                        else "${p.daysWorked} days · ${p.wfhDays} WFH · ${p.lopDays} LOP · ${p.totalInside.formatHm()} inside · avg ${p.avgInside.formatHm()} · avg break ${p.avgBreaks.formatHm()}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -198,7 +264,11 @@ private fun DayRow(s: DaySummary) {
     val flags = s.lopReasons.map { it.shortLabel() }
     Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row {
-            Text(s.date.format(dayRowFormat), Modifier.weight(1f), fontWeight = FontWeight.Medium)
+            Text(
+                s.date.format(dayRowFormat) + if (s.wfh) "  · WFH" else "",
+                Modifier.weight(1f),
+                fontWeight = FontWeight.Medium,
+            )
             if (s.lop) {
                 Text("LOP  ", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
             }
@@ -211,7 +281,7 @@ private fun DayRow(s: DaySummary) {
         Text(
             buildString {
                 append("${s.firstIn?.formatClock()} – ${s.lastOut?.formatClock() ?: "…"}")
-                append(" · break ${s.breaks.formatHm()}")
+                if (!s.wfh) append(" · break ${s.breaks.formatHm()}")
                 if (flags.isNotEmpty()) append(" · ${flags.joinToString()}")
             },
             style = MaterialTheme.typography.bodySmall,
