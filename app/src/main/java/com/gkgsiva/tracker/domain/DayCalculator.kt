@@ -9,6 +9,9 @@ data class Punch(val time: LocalTime, val isIn: Boolean)
 
 enum class DayStatus { NOT_STARTED, INSIDE, ON_BREAK, DONE, MISSING_CHECKOUT }
 
+/** Rules whose breach makes the day loss of pay, regardless of hours worked. */
+enum class LopReason { LATE_LOGIN, EARLY_EXIT, UNDER_8H, MISSING_CHECKOUT }
+
 data class DaySummary(
     val date: LocalDate,
     val status: DayStatus,
@@ -31,6 +34,20 @@ data class DaySummary(
     val lateArrival: Boolean get() = firstIn != null && firstIn > rules.arriveBy
     val earlyLeave: Boolean get() = status == DayStatus.DONE && lastOut != null && lastOut < rules.leaveAfter
     val breakExceeded: Boolean get() = breakLeft.isNegative
+    val finished: Boolean get() = status == DayStatus.DONE || status == DayStatus.MISSING_CHECKOUT
+
+    /**
+     * Any single breach makes the day LOP, even with 8h+ inside. A late login is known as soon
+     * as it happens; an early exit or short hours only once the day is finished.
+     */
+    val lopReasons: List<LopReason>
+        get() = buildList {
+            if (lateArrival) add(LopReason.LATE_LOGIN)
+            if (earlyLeave) add(LopReason.EARLY_EXIT)
+            if (status == DayStatus.MISSING_CHECKOUT) add(LopReason.MISSING_CHECKOUT)
+            else if (finished && !targetMet) add(LopReason.UNDER_8H)
+        }
+    val lop: Boolean get() = lopReasons.isNotEmpty()
 }
 
 object DayCalculator {

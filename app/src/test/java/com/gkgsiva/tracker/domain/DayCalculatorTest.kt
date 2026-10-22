@@ -121,5 +121,39 @@ class DayCalculatorTest {
         assertEquals(Duration.ofHours(8), w.avgInside)
         assertEquals(1, w.lateDays)
         assertEquals(1, w.shortDays)
+        assertEquals(1, w.lopDays)
+    }
+
+    @Test
+    fun onTimeFullDayIsNotLop() {
+        val s = DayCalculator.summarize(day, listOf(inAt(8, 30), outAt(13, 0), inAt(13, 30), outAt(17, 5)), null)
+        assertFalse(s.lop)
+    }
+
+    @Test
+    fun lateLoginIsLopEvenWithMoreThan8Hours() {
+        val s = DayCalculator.summarize(day, listOf(inAt(9, 5), outAt(18, 30)), null)
+        assertTrue(s.targetMet)
+        assertEquals(listOf(LopReason.LATE_LOGIN), s.lopReasons)
+    }
+
+    @Test
+    fun earlyExitIsLopEvenWithMoreThan8Hours() {
+        val s = DayCalculator.summarize(day, listOf(inAt(7, 30), outAt(16, 45)), null)
+        assertTrue(s.targetMet)
+        assertEquals(listOf(LopReason.EARLY_EXIT), s.lopReasons)
+    }
+
+    @Test
+    fun under8HoursIsLopEvenWhenOnTime() {
+        val s = DayCalculator.summarize(day, listOf(inAt(8, 55), outAt(12, 0), inAt(13, 30), outAt(17, 0)), null)
+        assertEquals(listOf(LopReason.UNDER_8H), s.lopReasons)
+    }
+
+    @Test
+    fun lateLoginShowsAsLopLive() {
+        val s = DayCalculator.summarize(day, listOf(inAt(9, 1)), now = t(10, 0))
+        assertEquals(listOf(LopReason.LATE_LOGIN), s.lopReasons)
+        assertFalse(DayCalculator.summarize(day, listOf(inAt(8, 59)), now = t(10, 0)).lop)
     }
 }

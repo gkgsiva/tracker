@@ -90,6 +90,7 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, vm: TrackerView
         }
 
         StatusCard(summary, live = isToday)
+        LopCard(summary)
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatTile("Inside", summary.inside.formatHm(), Modifier.weight(1f))
@@ -185,8 +186,8 @@ private fun StatusCard(s: DaySummary, live: Boolean) {
         DayStatus.NOT_STARTED -> (if (live) "Not logged in yet" else "No entries") to MaterialTheme.colorScheme.onSurfaceVariant
         DayStatus.INSIDE -> "Inside office" to MaterialTheme.colorScheme.primary
         DayStatus.ON_BREAK -> "On break" to MaterialTheme.colorScheme.tertiary
-        DayStatus.DONE -> (if (s.targetMet) "Day complete" else "Left early") to
-            (if (s.targetMet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+        DayStatus.DONE -> (if (s.lop) "Day complete · LOP" else "Day complete") to
+            (if (s.lop) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
         DayStatus.MISSING_CHECKOUT -> "Missing check-out" to MaterialTheme.colorScheme.error
     }
     Card(Modifier.fillMaxWidth()) {
@@ -209,6 +210,23 @@ private fun StatusCard(s: DaySummary, live: Boolean) {
                     fontFamily = FontFamily.Monospace,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun LopCard(s: DaySummary) {
+    if (!s.lop) return
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        ),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("LOP day", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            s.lopReasons.forEach { Text("• ${it.describe(s)}") }
         }
     }
 }

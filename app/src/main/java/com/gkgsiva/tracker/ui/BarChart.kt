@@ -18,15 +18,16 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.ceil
 import kotlin.math.max
 
-/** One bar: [inside] hours stacked under [breaks] hours. */
-data class Bar(val label: String, val inside: Float, val breaks: Float)
+/** One bar: [inside] hours stacked under [breaks] hours; [lop] bars are drawn in the error color. */
+data class Bar(val label: String, val inside: Float, val breaks: Float, val lop: Boolean = false)
 
 /** Stacked bar chart in hours with a dashed target line. */
 @Composable
 fun BarChart(bars: List<Bar>, target: Float, modifier: Modifier = Modifier) {
     val insideColor = MaterialTheme.colorScheme.primary
     val breakColor = MaterialTheme.colorScheme.tertiary
-    val targetColor = MaterialTheme.colorScheme.error
+    val lopColor = MaterialTheme.colorScheme.error
+    val targetColor = MaterialTheme.colorScheme.onSurfaceVariant
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
     val measurer = rememberTextMeasurer()
@@ -57,7 +58,7 @@ fun BarChart(bars: List<Bar>, target: Float, modifier: Modifier = Modifier) {
             bars.forEachIndexed { i, bar ->
                 val left = axisWidth + i * slot + (slot - barWidth) / 2f
                 if (bar.inside > 0f) {
-                    drawRoundRect(insideColor, Offset(left, y(bar.inside)), Size(barWidth, chartHeight - y(bar.inside)), corner)
+                    drawRoundRect(if (bar.lop) lopColor else insideColor, Offset(left, y(bar.inside)), Size(barWidth, chartHeight - y(bar.inside)), corner)
                 }
                 if (bar.breaks > 0f) {
                     val bTop = y(bar.inside + bar.breaks)

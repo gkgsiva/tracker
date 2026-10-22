@@ -27,7 +27,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.data.PunchEntity
-import com.gkgsiva.tracker.domain.DayStatus
 import com.gkgsiva.tracker.domain.DaySummary
 import com.gkgsiva.tracker.domain.PeriodSummary
 import com.gkgsiva.tracker.domain.Periods
@@ -86,9 +85,10 @@ private fun DailyView(summaries: Map<LocalDate, DaySummary>, today: LocalDate) {
     ChartCard(
         title = "Last $DAYS_SHOWN days",
         subtitle = "Hours inside office per day",
+        showLop = true,
         bars = dates.map { d ->
             val s = summaries[d]
-            Bar(d.format(dayLabel), s?.inside?.hours() ?: 0f, s?.breaks?.hours() ?: 0f)
+            Bar(d.format(dayLabel), s?.inside?.hours() ?: 0f, s?.breaks?.hours() ?: 0f, lop = s?.lop == true)
         },
     )
     val thisWeek = Periods.summarize(summaries, Periods.weekStart(today), today)
@@ -127,7 +127,7 @@ private fun PeriodView(
                     Text(rowLabel(p), fontWeight = FontWeight.Medium)
                     Text(
                         if (p.daysWorked == 0) "No days logged"
-                        else "${p.daysWorked} days · ${p.totalInside.formatHm()} inside · avg ${p.avgInside.formatHm()} · avg break ${p.avgBreaks.formatHm()}",
+                        else "${p.daysWorked} days · ${p.lopDays} LOP · ${p.totalInside.formatHm()} inside · avg ${p.avgInside.formatHm()} · avg break ${p.avgBreaks.formatHm()}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -138,7 +138,7 @@ private fun PeriodView(
 }
 
 @Composable
-private fun ChartCard(title: String, subtitle: String, bars: List<Bar>) {
+private fun ChartCard(title: String, subtitle: String, bars: List<Bar>, showLop: Boolean = false) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
@@ -147,7 +147,8 @@ private fun ChartCard(title: String, subtitle: String, bars: List<Bar>) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Legend(MaterialTheme.colorScheme.primary, "Inside")
                 Legend(MaterialTheme.colorScheme.tertiary, "Break")
-                Legend(MaterialTheme.colorScheme.error, "8h target")
+                if (showLop) Legend(MaterialTheme.colorScheme.error, "LOP day")
+                Legend(MaterialTheme.colorScheme.onSurfaceVariant, "8h target")
             }
         }
     }
@@ -173,8 +174,8 @@ private fun TotalsCard(title: String, p: PeriodSummary) {
             }
             Row {
                 Total("Avg/day", p.avgInside.formatHm(), Modifier.weight(1f))
-                Total("Late", "${p.lateDays}", Modifier.weight(1f), warn = p.lateDays > 0)
-                Total("Under 8h", "${p.shortDays}", Modifier.weight(1f), warn = p.shortDays > 0)
+                Total("LOP days", "${p.lopDays}", Modifier.weight(1f), warn = p.lopDays > 0)
+                Total("Late / under 8h", "${p.lateDays} / ${p.shortDays}", Modifier.weight(1f))
             }
         }
     }
@@ -194,19 +195,17 @@ private fun Total(label: String, value: String, modifier: Modifier, warn: Boolea
 
 @Composable
 private fun DayRow(s: DaySummary) {
-    val flags = buildList {
-        if (s.lateArrival) add("late")
-        if (s.earlyLeave) add("left early")
-        if (s.breakExceeded) add("long break")
-        if (s.status == DayStatus.MISSING_CHECKOUT) add("no check-out")
-    }
+    val flags = s.lopReasons.map { it.shortLabel() } + if (s.breakExceeded) listOf("long break") else emptyList()
     Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row {
             Text(s.date.format(dayRowFormat), Modifier.weight(1f), fontWeight = FontWeight.Medium)
+            if (s.lop) {
+                Text("LOP  ", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+            }
             Text(
                 s.inside.formatHm(),
                 fontWeight = FontWeight.Medium,
-                color = if (s.targetMet) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                color = if (s.targetMet && !s.lop) MaterialTheme.colorScheme.primary else Color.Unspecified,
             )
         }
         Text(

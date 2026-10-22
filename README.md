@@ -6,6 +6,10 @@ A small Android app for tracking office hours under these rules:
 - **8 hours** inside the office every day
 - Up to **1 hour** of total break time
 
+Breaking any one of the first three rules makes the day **LOP** (loss of pay), even with more than 8 hours
+inside: a late login, leaving before 5 PM, or less than 8 hours inside. A late login shows as LOP right away;
+the other two once the day is over.
+
 ## How it works
 
 Each day starts with your first login. After that, every **Check out** / **Check in** pair is a break.
@@ -18,7 +22,7 @@ The Today screen updates every second and shows:
 
 Entries can be added, edited or deleted for any day, in case you forget to tap.
 The History screen shows daily (last 14 days), weekly (last 8 weeks) and monthly (last 6 months) charts
-with inside time, break time and the 8h target, plus counts of late arrivals and days under 8h.
+with inside time, break time and the 8h target, plus LOP days (highlighted in red on the daily chart) and counts of late logins and days under 8h.
 
 Everything is stored locally on the phone in a Room (SQLite) database.
 
