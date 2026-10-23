@@ -2,6 +2,7 @@ package com.gkgsiva.tracker.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -338,22 +339,36 @@ private fun StatusCard(s: DaySummary, live: Boolean) {
                 if (live && (s.status == DayStatus.INSIDE || s.status == DayStatus.ON_BREAK)) PulsingDot(color)
                 Text(label, style = MaterialTheme.typography.titleMedium, color = color, fontWeight = FontWeight.SemiBold)
             }
-            ProgressRing(progress = progress, color = color, trackColor = MaterialTheme.colorScheme.surfaceVariant) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    RollingText(
-                        s.inside.formatHms(),
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.SemiBold,
-                        ),
-                    )
-                    Text(if (s.wfh) "worked of 8h" else "inside of 8h", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        "${(progress * 100).toInt().coerceAtMost(999)}%",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = color,
-                    )
-                }
+            val doneColor = if (isSystemInDarkTheme()) Color(0xFF81C784) else Color(0xFF2E7D32)
+            val fill by animateColorAsState(
+                when {
+                    s.finished && s.lop -> MaterialTheme.colorScheme.error
+                    progress >= 1f -> doneColor
+                    s.status == DayStatus.ON_BREAK -> MaterialTheme.colorScheme.tertiary
+                    else -> MaterialTheme.colorScheme.primary
+                },
+                tween(800),
+                label = "fill",
+            )
+            ClockDial(
+                progress = progress,
+                fillColor = fill,
+                faceColor = MaterialTheme.colorScheme.surfaceVariant,
+                handColor = MaterialTheme.colorScheme.onSurface,
+                tickColor = MaterialTheme.colorScheme.surface,
+            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                RollingText(
+                    s.inside.formatHms(),
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                )
+                Text(
+                    "${if (s.wfh) "worked" else "inside"} of 8h · ${(progress * 100).toInt().coerceAtMost(999)}%",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             if (s.status == DayStatus.ON_BREAK) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

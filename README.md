@@ -14,7 +14,7 @@ the other two once the day is over.
 
 Tap **Log in** when you arrive. After that you get **Start break** / **End break** for each break and
 **Log out** when you leave for the day (it warns you first if logging out now would make the day LOP).
-The Today screen updates every second, with an animated progress ring and rolling digits, and shows:
+The Today screen updates every second, with an animated clock dial that fills toward 8h and rolling digits, and shows:
 
 - time spent inside the office, with progress toward 8h
 - total break time (including the break you're on right now) and how much allowance is left

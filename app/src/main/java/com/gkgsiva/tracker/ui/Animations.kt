@@ -24,18 +24,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.cos
+import kotlin.math.sin
 
 /** Text whose characters roll up, odometer style, whenever they change. */
 @Composable
@@ -57,31 +57,47 @@ fun RollingText(text: String, modifier: Modifier = Modifier, style: TextStyle = 
     }
 }
 
-/** Circular progress ring that sweeps smoothly to [progress] (0..1). */
+/**
+ * A filled clock face for the 8h target: a wedge in [fillColor] sweeps clockwise from 12 o'clock
+ * as [progress] (0..1) grows, with a hand at its edge and one tick per hour.
+ */
 @Composable
-fun ProgressRing(
+fun ClockDial(
     progress: Float,
-    color: Color,
-    trackColor: Color,
+    fillColor: Color,
+    faceColor: Color,
+    handColor: Color,
+    tickColor: Color,
     modifier: Modifier = Modifier,
-    size: Dp = 240.dp,
-    stroke: Dp = 14.dp,
-    content: @Composable () -> Unit,
+    size: Dp = 220.dp,
+    hours: Int = 8,
 ) {
-    val animated by animateFloatAsState(
+    val sweep by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
         animationSpec = tween(900, easing = FastOutSlowInEasing),
-        label = "ring",
+        label = "dial",
     )
-    Box(modifier.size(size), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(size)) {
-            val w = stroke.toPx()
-            val arcSize = Size(this.size.width - w, this.size.height - w)
-            val topLeft = Offset(w / 2, w / 2)
-            drawArc(trackColor, 0f, 360f, false, topLeft, arcSize, style = Stroke(w))
-            drawArc(color, -90f, 360f * animated, false, topLeft, arcSize, style = Stroke(w, cap = StrokeCap.Round))
+    Canvas(modifier.size(size)) {
+        val r = this.size.minDimension / 2f
+        fun point(fraction: Float, radius: Float): Offset {
+            val a = Math.toRadians(-90.0 + 360.0 * fraction)
+            return Offset(center.x + radius * cos(a).toFloat(), center.y + radius * sin(a).toFloat())
         }
-        content()
+
+        drawCircle(faceColor, r)
+        drawArc(fillColor, -90f, 360f * sweep, useCenter = true)
+        for (i in 0 until hours) {
+            drawLine(
+                tickColor,
+                point(i / hours.toFloat(), r * 0.8f),
+                point(i / hours.toFloat(), r * 0.95f),
+                strokeWidth = 3.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+        }
+        drawLine(handColor, center, point(sweep, r * 0.72f), strokeWidth = 4.dp.toPx(), cap = StrokeCap.Round)
+        drawCircle(handColor, 7.dp.toPx())
+        drawCircle(handColor.copy(alpha = 0.25f), r, style = Stroke(2.dp.toPx()))
     }
 }
 
