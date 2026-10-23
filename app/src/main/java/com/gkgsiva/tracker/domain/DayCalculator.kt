@@ -10,7 +10,18 @@ import java.time.LocalTime
  */
 data class Punch(val time: LocalTime, val isIn: Boolean, val isLogout: Boolean = false)
 
-enum class DayStatus { NOT_STARTED, INSIDE, ON_BREAK, DONE, MISSING_CHECKOUT }
+enum class DayStatus { NOT_STARTED, INSIDE, ON_BREAK, DONE, MISSING_CHECKOUT, DAY_OFF }
+
+enum class DayType(val label: String) {
+    OFFICE("Office"),
+    /** Only first login and last logout count, no breaks; same LOP rules. */
+    WFH("WFH"),
+    HOLIDAY("Holiday"),
+    LEAVE("On leave");
+
+    /** No login needed and never LOP. */
+    val isDayOff: Boolean get() = this == HOLIDAY || this == LEAVE
+}
 
 /** Rules whose breach makes the day loss of pay, regardless of hours worked. */
 enum class LopReason { LATE_LOGIN, EARLY_EXIT, UNDER_8H, MISSING_CHECKOUT }
@@ -31,9 +42,10 @@ data class DaySummary(
     /** Latest time to come back from the current break without exceeding the allowance. */
     val returnBy: LocalTime?,
     val rules: Rules,
-    /** Work-from-home day: only first login and last logout count, no breaks. */
-    val wfh: Boolean = false,
+    val type: DayType = DayType.OFFICE,
 ) {
+    val wfh: Boolean get() = type == DayType.WFH
+    val dayOff: Boolean get() = type.isDayOff
     val worked: Boolean get() = firstIn != null
     val targetMet: Boolean get() = inside >= rules.requiredInside
     val lateArrival: Boolean get() = firstIn != null && firstIn > rules.arriveBy
@@ -65,14 +77,15 @@ object DayCalculator {
      * On today, a trailing break check-out is an ongoing break and a logout ends the day. On past
      * days any trailing check-out counts as leaving.
      *
-     * On a [wfh] day only the first login and the last check-out are used, so there are no breaks.
+     * On a WFH day only the first login and the last check-out are used, so there are no breaks.
+     * Holidays and leave days ignore punches entirely.
      */
     fun summarize(
         date: LocalDate,
         punches: List<Punch>,
         now: LocalTime?,
         rules: Rules = Rules(),
-        wfh: Boolean = false,
+        type: DayType = DayType.OFFICE,
     ): DaySummary {
         var inside = Duration.ZERO
         var breaks = Duration.ZERO
@@ -83,7 +96,12 @@ object DayCalculator {
         var outSince: LocalTime? = null
         var loggedOut = false
 
-        for (p in if (wfh) wfhPunches(punches) else punches.sortedBy { it.time }) {
+        val effective = when {
+            type.isDayOff -> emptyList()
+            type == DayType.WFH -> wfhPunches(punches)
+            else -> punches.sortedBy { it.time }
+        }
+        for (p in effective) {
             if (p.isIn) {
                 if (inSince != null) continue
                 if (firstIn == null) {
@@ -106,6 +124,7 @@ object DayCalculator {
 
         var returnBy: LocalTime? = null
         val status = when {
+            type.isDayOff -> DayStatus.DAY_OFF
             firstIn == null -> DayStatus.NOT_STARTED
             inSince != null && now == null -> DayStatus.MISSING_CHECKOUT
             inSince != null -> {
@@ -122,7 +141,8 @@ object DayCalculator {
             else -> DayStatus.DONE
         }
 
-        val remaining = (rules.requiredInside - inside).coerceAtLeast(Duration.ZERO)
+        val remaining = if (type.isDayOff) Duration.ZERO
+        else (rules.requiredInside - inside).coerceAtLeast(Duration.ZERO)
         val expectedLeave = if (now != null && (status == DayStatus.INSIDE || status == DayStatus.ON_BREAK)) {
             maxOf(now.plus(remaining), rules.leaveAfter)
         } else null
@@ -140,7 +160,7 @@ object DayCalculator {
             expectedLeave = expectedLeave,
             returnBy = returnBy,
             rules = rules,
-            wfh = wfh,
+            type = type,
         )
     }
 

@@ -22,8 +22,8 @@ interface PunchDao {
     @Delete
     suspend fun delete(punch: PunchEntity)
 
-    @Query("SELECT epochDay FROM days WHERE isWfh = 1")
-    fun observeWfhDays(): Flow<List<Long>>
+    @Query("SELECT * FROM days")
+    fun observeDays(): Flow<List<DayEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDay(day: DayEntity)

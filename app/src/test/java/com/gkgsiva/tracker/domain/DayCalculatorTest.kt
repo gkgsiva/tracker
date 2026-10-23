@@ -143,7 +143,7 @@ class DayCalculatorTest {
     @Test
     fun wfhUsesOnlyFirstLoginAndLastLogout() {
         val punches = listOf(inAt(8, 30), outAt(12, 0), inAt(13, 0), logoutAt(17, 0))
-        val s = DayCalculator.summarize(day, punches, now = null, wfh = true)
+        val s = DayCalculator.summarize(day, punches, now = null, type = DayType.WFH)
         assertEquals(Duration.ofMinutes(510), s.inside)
         assertEquals(Duration.ZERO, s.breaks)
         assertEquals(0, s.breakCount)
@@ -153,14 +153,37 @@ class DayCalculatorTest {
 
     @Test
     fun wfhIsLiveUntilLogoutAndFollowsLopRules() {
-        val live = DayCalculator.summarize(day, listOf(inAt(9, 10)), now = t(12, 0), wfh = true)
+        val live = DayCalculator.summarize(day, listOf(inAt(9, 10)), now = t(12, 0), type = DayType.WFH)
         assertEquals(DayStatus.INSIDE, live.status)
         assertEquals(Duration.ofMinutes(170), live.inside)
         assertEquals(listOf(LopReason.LATE_LOGIN), live.lopReasons)
 
-        val relogin = DayCalculator.summarize(day, listOf(inAt(8, 0), logoutAt(15, 0), inAt(15, 30)), now = t(16, 0), wfh = true)
+        val relogin = DayCalculator.summarize(day, listOf(inAt(8, 0), logoutAt(15, 0), inAt(15, 30)), now = t(16, 0), type = DayType.WFH)
         assertEquals(DayStatus.INSIDE, relogin.status)
         assertEquals(Duration.ofHours(8), relogin.inside)
+    }
+
+    @Test
+    fun holidayAndLeaveNeedNoLoginAndAreNeverLop() {
+        for (type in listOf(DayType.HOLIDAY, DayType.LEAVE)) {
+            val s = DayCalculator.summarize(day, listOf(inAt(10, 0), logoutAt(12, 0)), now = t(13, 0), type = type)
+            assertEquals(DayStatus.DAY_OFF, s.status)
+            assertFalse(s.worked)
+            assertFalse(s.lop)
+            assertEquals(Duration.ZERO, s.remaining)
+            assertEquals(Duration.ZERO, s.inside)
+        }
+        val mon = LocalDate.of(2026, 10, 19)
+        val days = listOf(
+            DayCalculator.summarize(mon, emptyList(), null, type = DayType.HOLIDAY),
+            DayCalculator.summarize(mon.plusDays(1), emptyList(), null, type = DayType.LEAVE),
+            DayCalculator.summarize(mon.plusDays(2), listOf(inAt(9, 30), logoutAt(17, 0)), null),
+        ).associateBy { it.date }
+        val w = Periods.summarize(days, mon, mon.plusDays(6))
+        assertEquals(1, w.holidays)
+        assertEquals(1, w.leaveDays)
+        assertEquals(1, w.daysWorked)
+        assertEquals(1, w.lopDays)
     }
 
     @Test

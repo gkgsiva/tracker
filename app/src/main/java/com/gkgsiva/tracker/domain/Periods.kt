@@ -17,6 +17,8 @@ data class PeriodSummary(
     val shortDays: Int,
     val lopDays: Int,
     val wfhDays: Int,
+    val holidays: Int,
+    val leaveDays: Int,
 ) {
     val avgInside: Duration get() = if (daysWorked == 0) Duration.ZERO else totalInside.dividedBy(daysWorked.toLong())
     val avgBreaks: Duration get() = if (daysWorked == 0) Duration.ZERO else totalBreaks.dividedBy(daysWorked.toLong())
@@ -45,7 +47,8 @@ object Periods {
     }
 
     fun summarize(days: Map<LocalDate, DaySummary>, start: LocalDate, endInclusive: LocalDate): PeriodSummary {
-        val inRange = days.values.filter { it.worked && it.date >= start && it.date <= endInclusive }
+        val all = days.values.filter { it.date >= start && it.date <= endInclusive }
+        val inRange = all.filter { it.worked }
         return PeriodSummary(
             start = start,
             endInclusive = endInclusive,
@@ -56,6 +59,8 @@ object Periods {
             shortDays = inRange.count { it.finished && !it.targetMet },
             lopDays = inRange.count { it.lop },
             wfhDays = inRange.count { it.wfh },
+            holidays = all.count { it.type == DayType.HOLIDAY },
+            leaveDays = all.count { it.type == DayType.LEAVE },
         )
     }
 }

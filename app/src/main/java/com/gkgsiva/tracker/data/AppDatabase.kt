@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [PunchEntity::class, DayEntity::class], version = 3)
+@Database(entities = [PunchEntity::class, DayEntity::class], version = 4)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun punchDao(): PunchDao
 
@@ -26,11 +26,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Replaces the WFH flag with a day type (OFFICE, WFH, HOLIDAY, LEAVE). */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE days_new (epochDay INTEGER NOT NULL, type TEXT NOT NULL, PRIMARY KEY(epochDay))")
+                db.execSQL(
+                    "INSERT INTO days_new (epochDay, type) " +
+                        "SELECT epochDay, CASE WHEN isWfh = 1 THEN 'WFH' ELSE 'OFFICE' END FROM days"
+                )
+                db.execSQL("DROP TABLE days")
+                db.execSQL("ALTER TABLE days_new RENAME TO days")
+            }
+        }
+
         @Volatile private var instance: AppDatabase? = null
 
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "tracker.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
                 .also { instance = it }
         }

@@ -31,7 +31,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -52,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.data.PunchEntity
 import com.gkgsiva.tracker.domain.DayStatus
 import com.gkgsiva.tracker.domain.DaySummary
+import com.gkgsiva.tracker.domain.DayType
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -79,7 +79,7 @@ private fun PunchEntity.label(isFirst: Boolean): String = when (kind) {
 }
 
 @Composable
-fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, wfhDays: Set<LocalDate>, vm: TrackerViewModel) {
+fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, dayTypes: Map<LocalDate, DayType>, vm: TrackerViewModel) {
     val now by rememberNow()
     val today = now.toLocalDate()
     var selectedEpochDay by rememberSaveable { mutableStateOf(today.toEpochDay()) }
@@ -87,8 +87,9 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, wfhDays: Set<Lo
     val isToday = date == today
     val punches = punchesByDay[date].orEmpty().sortedBy { it.secondOfDay }
     val context = LocalContext.current
-    val wfh = date in wfhDays
-    val summary = summarizeDay(date, punches, now, wfh)
+    val type = dayTypes[date] ?: DayType.OFFICE
+    val wfh = type == DayType.WFH
+    val summary = summarizeDay(date, punches, now, type)
 
     var editing by remember { mutableStateOf<PunchEntity?>(null) }
     var adding by remember { mutableStateOf(false) }
@@ -128,20 +129,25 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, wfhDays: Set<Lo
         StatusCard(summary, live = isToday)
 
         Card(Modifier.fillMaxWidth()) {
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Work from home", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "Only first login and last logout count",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    DayType.entries.forEach { t ->
+                        FilterChip(selected = type == t, onClick = { vm.setDayType(date, t) }, label = { Text(t.label) })
+                    }
                 }
-                Switch(checked = wfh, onCheckedChange = { vm.setWfh(date, it) })
+                Text(
+                    when (type) {
+                        DayType.OFFICE -> "Login, breaks and logout are tracked"
+                        DayType.WFH -> "Only first login and last logout count"
+                        DayType.HOLIDAY, DayType.LEAVE -> "No login needed, never LOP"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
-        if (isToday) {
+        if (isToday && !summary.dayOff) {
             ActionButtons(
                 status = summary.status,
                 wfh = wfh,
@@ -155,7 +161,7 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, wfhDays: Set<Lo
 
         LopCard(summary)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!summary.dayOff) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatTile(if (wfh) "Worked" else "Inside", summary.inside.formatHm(), Modifier.weight(1f))
             if (!wfh) {
                 StatTile(
@@ -168,7 +174,7 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, wfhDays: Set<Lo
             StatTile("To go", summary.remaining.formatHm(), Modifier.weight(1f), sub = "of 8h")
         }
 
-        DetailsCard(summary)
+        if (!summary.dayOff) DetailsCard(summary)
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(vertical = 8.dp)) {
@@ -291,11 +297,25 @@ private fun ActionButtons(
         DayStatus.DONE, DayStatus.MISSING_CHECKOUT -> OutlinedButton(onClick = onLogin, modifier = Modifier.fillMaxWidth()) {
             Text("Log in again")
         }
+        DayStatus.DAY_OFF -> Unit
     }
 }
 
 @Composable
 private fun StatusCard(s: DaySummary, live: Boolean) {
+    if (s.dayOff) {
+        Card(Modifier.fillMaxWidth()) {
+            Column(
+                Modifier.fillMaxWidth().padding(vertical = 40.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(s.type.label, style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
+                Text("Day off · no login needed", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        return
+    }
     val (label, target) = when (s.status) {
         DayStatus.NOT_STARTED -> (if (live) "Not logged in yet" else "No entries") to MaterialTheme.colorScheme.onSurfaceVariant
         DayStatus.INSIDE -> (if (s.wfh) "Working from home" else "Inside office") to MaterialTheme.colorScheme.primary
@@ -303,6 +323,7 @@ private fun StatusCard(s: DaySummary, live: Boolean) {
         DayStatus.DONE -> (if (s.lop) "Logged out · LOP" else "Day complete") to
             (if (s.lop) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
         DayStatus.MISSING_CHECKOUT -> "Missing logout" to MaterialTheme.colorScheme.error
+        DayStatus.DAY_OFF -> s.type.label to MaterialTheme.colorScheme.primary
     }
     val color by animateColorAsState(target, tween(600), label = "status")
     val progress = s.inside.seconds / s.rules.requiredInside.seconds.toFloat()

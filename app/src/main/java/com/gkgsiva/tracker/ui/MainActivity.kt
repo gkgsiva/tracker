@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
             TrackerTheme {
                 val vm: TrackerViewModel = viewModel()
                 val punchesByDay by vm.punchesByDay.collectAsStateWithLifecycle()
-                val wfhDays by vm.wfhDays.collectAsStateWithLifecycle()
+                val dayTypes by vm.dayTypes.collectAsStateWithLifecycle()
                 var tab by rememberSaveable { mutableIntStateOf(0) }
 
                 Scaffold(
@@ -55,8 +55,8 @@ class MainActivity : ComponentActivity() {
                 ) { padding ->
                     Box(Modifier.fillMaxSize().padding(padding)) {
                         when (tab) {
-                            0 -> TodayScreen(punchesByDay, wfhDays, vm)
-                            else -> HistoryScreen(punchesByDay, wfhDays, onClearAll = vm::clearAll)
+                            0 -> TodayScreen(punchesByDay, dayTypes, vm)
+                            else -> HistoryScreen(punchesByDay, dayTypes, onClearAll = vm::clearAll)
                         }
                     }
                 }

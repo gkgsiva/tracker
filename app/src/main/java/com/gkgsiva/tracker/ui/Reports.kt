@@ -14,6 +14,10 @@ object Reports {
 
     fun day(s: DaySummary): String = buildString {
         appendLine("Office Tracker · ${s.date.format(longDate)}${if (s.wfh) " (WFH)" else ""}")
+        if (s.dayOff) {
+            append(s.type.label)
+            return@buildString
+        }
         if (!s.worked) {
             appendLine("No entries.")
             return@buildString
@@ -41,9 +45,16 @@ object Reports {
         appendLine("Days worked: ${p.daysWorked} (${p.wfhDays} WFH) · LOP days: ${p.lopDays}")
         appendLine("Total inside: ${p.totalInside.formatHm()} · Avg/day: ${p.avgInside.formatHm()} · Avg break: ${p.avgBreaks.formatHm()}")
         appendLine("Late logins: ${p.lateDays} · Under 8h: ${p.shortDays}")
-        val worked = days.values.filter { it.worked && it.date >= p.start && it.date <= p.endInclusive }.sortedBy { it.date }
-        if (worked.isNotEmpty()) appendLine()
-        worked.forEach { s ->
+        appendLine("Holidays: ${p.holidays} · Leave days: ${p.leaveDays}")
+        val listed = days.values
+            .filter { (it.worked || it.dayOff) && it.date >= p.start && it.date <= p.endInclusive }
+            .sortedBy { it.date }
+        if (listed.isNotEmpty()) appendLine()
+        listed.forEach { s ->
+            if (s.dayOff) {
+                appendLine("${s.date.format(shortDate)}: ${s.type.label}")
+                return@forEach
+            }
             append(s.date.format(shortDate))
             if (s.wfh) append(" (WFH)")
             append(": ${s.firstIn?.formatClock()}–${s.lastOut?.takeIf { s.finished }?.formatClock() ?: "…"}")

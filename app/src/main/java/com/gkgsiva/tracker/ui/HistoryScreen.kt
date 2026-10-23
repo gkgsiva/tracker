@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.data.PunchEntity
 import com.gkgsiva.tracker.domain.DaySummary
+import com.gkgsiva.tracker.domain.DayType
 import com.gkgsiva.tracker.domain.PeriodSummary
 import com.gkgsiva.tracker.domain.Periods
 import java.time.LocalDate
@@ -60,12 +61,12 @@ private const val MONTHS_SHOWN = 6
 @Composable
 fun HistoryScreen(
     punchesByDay: Map<LocalDate, List<PunchEntity>>,
-    wfhDays: Set<LocalDate>,
+    dayTypes: Map<LocalDate, DayType>,
     onClearAll: () -> Unit,
 ) {
     val now by rememberNow()
     val today = now.toLocalDate()
-    val summaries = summarizeAll(punchesByDay, wfhDays, now)
+    val summaries = summarizeAll(punchesByDay, dayTypes, now)
     var confirmClear by remember { mutableStateOf(false) }
     var sharing by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -118,7 +119,7 @@ fun HistoryScreen(
             text = {
                 Column {
                     TextButton(onClick = {
-                        share("Office report today", Reports.day(summaries[today] ?: summarizeDay(today, emptyList(), now, today in wfhDays)))
+                        share("Office report today", Reports.day(summaries[today] ?: summarizeDay(today, emptyList(), now, dayTypes[today] ?: DayType.OFFICE)))
                     }) { Text("Today") }
                     TextButton(onClick = { share("Office report this week", Reports.week(summaries, today)) }) { Text("This week") }
                     TextButton(onClick = { share("Office report this month", Reports.month(summaries, today)) }) { Text("This month") }
@@ -133,7 +134,7 @@ fun HistoryScreen(
         AlertDialog(
             onDismissRequest = { confirmClear = false },
             title = { Text("Delete all data?") },
-            text = { Text("This permanently deletes every login, break, logout and WFH day. It can't be undone.") },
+            text = { Text("This permanently deletes every login, break, logout, and WFH, holiday and leave day. It can't be undone.") },
             confirmButton = {
                 TextButton(
                     onClick = { onClearAll(); confirmClear = false },
@@ -160,7 +161,7 @@ private fun DailyView(summaries: Map<LocalDate, DaySummary>, today: LocalDate) {
     val thisWeek = Periods.summarize(summaries, Periods.weekStart(today), today)
     TotalsCard("This week", thisWeek)
 
-    val worked = dates.reversed().mapNotNull { summaries[it] }.filter { it.worked }
+    val worked = dates.reversed().mapNotNull { summaries[it] }.filter { it.worked || it.dayOff }
     if (worked.isNotEmpty()) {
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(vertical = 8.dp)) {
@@ -193,7 +194,7 @@ private fun PeriodView(
                     Text(rowLabel(p), fontWeight = FontWeight.Medium)
                     Text(
                         if (p.daysWorked == 0) "No days logged"
-                        else "${p.daysWorked} days · ${p.wfhDays} WFH · ${p.lopDays} LOP · ${p.totalInside.formatHm()} inside · avg ${p.avgInside.formatHm()} · avg break ${p.avgBreaks.formatHm()}",
+                        else "${p.daysWorked} days · ${p.wfhDays} WFH · ${p.lopDays} LOP · ${p.holidays} holiday · ${p.leaveDays} leave · ${p.totalInside.formatHm()} inside · avg ${p.avgInside.formatHm()} · avg break ${p.avgBreaks.formatHm()}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -243,6 +244,11 @@ private fun TotalsCard(title: String, p: PeriodSummary) {
                 Total("LOP days", "${p.lopDays}", Modifier.weight(1f), warn = p.lopDays > 0)
                 Total("Late / under 8h", "${p.lateDays} / ${p.shortDays}", Modifier.weight(1f))
             }
+            Row {
+                Total("WFH", "${p.wfhDays}", Modifier.weight(1f))
+                Total("Holidays", "${p.holidays}", Modifier.weight(1f))
+                Total("Leave", "${p.leaveDays}", Modifier.weight(1f))
+            }
         }
     }
 }
@@ -261,6 +267,13 @@ private fun Total(label: String, value: String, modifier: Modifier, warn: Boolea
 
 @Composable
 private fun DayRow(s: DaySummary) {
+    if (s.dayOff) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+            Text(s.date.format(dayRowFormat), Modifier.weight(1f), fontWeight = FontWeight.Medium)
+            Text(s.type.label, color = MaterialTheme.colorScheme.primary)
+        }
+        return
+    }
     val flags = s.lopReasons.map { it.shortLabel() }
     Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row {

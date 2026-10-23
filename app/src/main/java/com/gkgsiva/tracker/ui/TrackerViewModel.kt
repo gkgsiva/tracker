@@ -7,6 +7,7 @@ import androidx.room.withTransaction
 import com.gkgsiva.tracker.data.AppDatabase
 import com.gkgsiva.tracker.data.DayEntity
 import com.gkgsiva.tracker.data.PunchEntity
+import com.gkgsiva.tracker.domain.DayType
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -25,12 +26,18 @@ class TrackerViewModel(app: Application) : AndroidViewModel(app) {
         .map { all -> all.groupBy { it.date } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
-    val wfhDays: StateFlow<Set<LocalDate>> = dao.observeWfhDays()
-        .map { days -> days.map(LocalDate::ofEpochDay).toSet() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+    /** Days that aren't plain office days. */
+    val dayTypes: StateFlow<Map<LocalDate, DayType>> = dao.observeDays()
+        .map { days ->
+            days.mapNotNull { d ->
+                val type = DayType.entries.firstOrNull { it.name == d.type } ?: return@mapNotNull null
+                if (type == DayType.OFFICE) null else LocalDate.ofEpochDay(d.epochDay) to type
+            }.toMap()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
-    fun setWfh(date: LocalDate, wfh: Boolean) = viewModelScope.launch {
-        dao.upsertDay(DayEntity(date.toEpochDay(), wfh))
+    fun setDayType(date: LocalDate, type: DayType) = viewModelScope.launch {
+        dao.upsertDay(DayEntity(date.toEpochDay(), type.name))
     }
 
     /** Deletes every entry and day setting. */
