@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.data.PunchEntity
 import com.gkgsiva.tracker.domain.DayStatus
@@ -131,9 +132,9 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, dayTypes: Map<L
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     DayType.entries.forEach { t ->
-                        FilterChip(selected = type == t, onClick = { vm.setDayType(date, t) }, label = { Text(t.label) })
+                        ChoiceChip(t.label, selected = type == t, onClick = { vm.setDayType(date, t) }, Modifier.weight(1f))
                     }
                 }
                 Text(
@@ -256,6 +257,26 @@ fun TodayScreen(punchesByDay: Map<LocalDate, List<PunchEntity>>, dayTypes: Map<L
             dismissButton = { TextButton(onClick = { confirmLogout = null }) { Text("Cancel") } },
         )
     }
+}
+
+/** Equal-width chip with single-line, centered text, for a row of choices. */
+@Composable
+private fun ChoiceChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        modifier = modifier,
+        label = {
+            Text(
+                text,
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.labelMedium,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                softWrap = false,
+            )
+        },
+    )
 }
 
 @Composable
@@ -486,12 +507,13 @@ private fun PunchDialog(
         title = { Text(title) },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     EntryKind.entries.filter { !wfh || it != EntryKind.BREAK }.forEach { k ->
-                        FilterChip(
+                        ChoiceChip(
+                            if (k == EntryKind.IN) "In" else k.label,
                             selected = kind == k,
                             onClick = { kind = k },
-                            label = { Text(if (k == EntryKind.IN) "In" else k.label) },
+                            Modifier.weight(1f),
                         )
                     }
                 }
