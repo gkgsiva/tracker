@@ -18,6 +18,17 @@ fun Duration.formatHm(): String {
     return "%s%dh %02dm".format(sign, totalMin / 60, totalMin % 60)
 }
 
+/** "8h", "8h 30m" or "45m", for rule values. */
+fun Duration.formatShort(): String {
+    val h = toMinutes() / 60
+    val m = toMinutes() % 60
+    return when {
+        h == 0L -> "${m}m"
+        m == 0L -> "${h}h"
+        else -> "${h}h ${m}m"
+    }
+}
+
 /** "7:05:42", used for the live counters. */
 fun Duration.formatHms(): String {
     val s = abs(seconds)
@@ -30,13 +41,13 @@ fun Duration.hours(): Float = seconds / 3600f
 fun LopReason.shortLabel(): String = when (this) {
     LopReason.LATE_LOGIN -> "late login"
     LopReason.EARLY_EXIT -> "left early"
-    LopReason.UNDER_8H -> "under 8h"
+    LopReason.UNDER_8H -> "short hours"
     LopReason.MISSING_CHECKOUT -> "no logout"
 }
 
 fun LopReason.describe(s: DaySummary): String = when (this) {
     LopReason.LATE_LOGIN -> "Logged in at ${s.firstIn?.formatClock()}, after ${s.rules.arriveBy.formatClock()}"
     LopReason.EARLY_EXIT -> "Left at ${s.lastOut?.formatClock()}, before ${s.rules.leaveAfter.formatClock()}"
-    LopReason.UNDER_8H -> "Only ${s.inside.formatHm()} inside, 8h required"
+    LopReason.UNDER_8H -> "Only ${s.inside.formatHm()} inside, ${s.rules.requiredInside.formatShort()} required"
     LopReason.MISSING_CHECKOUT -> "No logout recorded"
 }

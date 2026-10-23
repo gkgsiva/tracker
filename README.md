@@ -30,10 +30,20 @@ same LOP rules), **Holiday** or **On leave** (no login needed, never LOP). Histo
 holiday and leave days separately. The share icon sends a text report for a day, this week or this month through any app
 (WhatsApp, email, …).
 
-Everything is stored locally on the phone in a Room (SQLite) database. **Clear all data** at the bottom of
-History deletes it after a confirmation.
+Tap the date on Today to jump to any day, including future dates, so you can plan leave and holidays
+ahead. History lists what's planned and how much leave you've taken this year.
 
-The rules live in `app/src/main/java/com/gkgsiva/tracker/domain/Rules.kt` if they ever change.
+**Settings** lets you change the rules (login by, leave after, hours inside, break allowance), pick weekly
+off days (Saturday and Sunday by default), turn reminders on or off (login reminder 15 minutes before the
+deadline, "you can leave now", and "break allowance used"), export or import a CSV backup, and clear all data.
+
+There's also a home-screen widget (long-press the home screen → Widgets → Office Tracker) with a live counter
+and one-tap Log in / Start break / End break / Log out.
+
+Everything is stored locally on the phone in a Room (SQLite) database. Nothing runs in the background: the
+live counter only ticks while the app is open, and reminders are a few one-shot alarms.
+
+Default rules live in `app/src/main/java/com/gkgsiva/tracker/domain/Rules.kt`.
 
 ## Getting the APK
 

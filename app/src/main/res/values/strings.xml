@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Office Tracker</string>
+    <string name="widget_description">Log in, take breaks and log out with one tap</string>
 </resources>

@@ -15,14 +15,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -41,8 +39,10 @@ import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.data.PunchEntity
 import com.gkgsiva.tracker.domain.DaySummary
 import com.gkgsiva.tracker.domain.DayType
+import com.gkgsiva.tracker.domain.Settings
 import com.gkgsiva.tracker.domain.PeriodSummary
 import com.gkgsiva.tracker.domain.Periods
+import java.time.Duration
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -62,12 +62,14 @@ private const val MONTHS_SHOWN = 6
 fun HistoryScreen(
     punchesByDay: Map<LocalDate, List<PunchEntity>>,
     dayTypes: Map<LocalDate, DayType>,
-    onClearAll: () -> Unit,
+    settings: Settings,
 ) {
     val now by rememberNow()
     val today = now.toLocalDate()
-    val summaries = summarizeAll(punchesByDay, dayTypes, now)
-    var confirmClear by remember { mutableStateOf(false) }
+    val summaries = summarizeAll(punchesByDay, dayTypes, now, settings)
+    /** Also covers days with nothing stored, such as weekly offs. */
+    fun summaryOf(date: LocalDate) = summaries[date] ?: summarizeDay(date, emptyList(), now, null, settings)
+    val target = settings.rules.requiredInside
     var sharing by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var range by rememberSaveable { mutableIntStateOf(0) }
@@ -88,24 +90,22 @@ fun HistoryScreen(
         }
 
         when (selected) {
-            Range.DAILY -> DailyView(summaries, today)
+            Range.DAILY -> DailyView(summaries, ::summaryOf, today, target)
             Range.WEEKLY -> PeriodView(
+                target = target,
                 periods = Periods.weekly(summaries, today, WEEKS_SHOWN),
                 barLabel = { it.start.format(weekLabel) },
                 rowLabel = { "Week of ${it.start.format(dayRowFormat)}" },
             )
             Range.MONTHLY -> PeriodView(
+                target = target,
                 periods = Periods.monthly(summaries, today, MONTHS_SHOWN),
                 barLabel = { it.start.format(monthLabel) },
                 rowLabel = { it.start.format(monthRowFormat) },
             )
         }
 
-        OutlinedButton(
-            onClick = { confirmClear = true },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-        ) { Text("Clear all data") }
+        UpcomingCard(summaries, today)
     }
 
     if (sharing) {
@@ -119,7 +119,7 @@ fun HistoryScreen(
             text = {
                 Column {
                     TextButton(onClick = {
-                        share("Office report today", Reports.day(summaries[today] ?: summarizeDay(today, emptyList(), now, dayTypes[today] ?: DayType.OFFICE)))
+                        share("Office report today", Reports.day(summaryOf(today)))
                     }) { Text("Today") }
                     TextButton(onClick = { share("Office report this week", Reports.week(summaries, today)) }) { Text("This week") }
                     TextButton(onClick = { share("Office report this month", Reports.month(summaries, today)) }) { Text("This month") }
@@ -129,27 +129,49 @@ fun HistoryScreen(
             dismissButton = { TextButton(onClick = { sharing = false }) { Text("Cancel") } },
         )
     }
+}
 
-    if (confirmClear) {
-        AlertDialog(
-            onDismissRequest = { confirmClear = false },
-            title = { Text("Delete all data?") },
-            text = { Text("This permanently deletes every login, break, logout, and WFH, holiday and leave day. It can't be undone.") },
-            confirmButton = {
-                TextButton(
-                    onClick = { onClearAll(); confirmClear = false },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text("Delete everything") }
-            },
-            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } },
-        )
+/** Planned holidays and leave, plus how much leave was taken this year. */
+@Composable
+private fun UpcomingCard(summaries: Map<LocalDate, DaySummary>, today: LocalDate) {
+    val upcoming = summaries.values.filter { it.date > today && it.dayOff }.sortedBy { it.date }
+    val leaveThisYear = summaries.values.filter { it.type == DayType.LEAVE && it.date.year == today.year }
+    val taken = leaveThisYear.count { it.date <= today }
+    val planned = leaveThisYear.size - taken
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Leave & holidays", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Leave in ${today.year}: $taken taken · $planned planned",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (upcoming.isEmpty()) {
+                Text(
+                    "Nothing planned. On Today, tap the date to pick a future day and mark it Holiday or On leave.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            upcoming.forEach { s ->
+                Row {
+                    Text(s.date.format(dayRowFormat), Modifier.weight(1f))
+                    Text(s.type.label, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun DailyView(summaries: Map<LocalDate, DaySummary>, today: LocalDate) {
+private fun DailyView(
+    summaries: Map<LocalDate, DaySummary>,
+    summaryOf: (LocalDate) -> DaySummary,
+    today: LocalDate,
+    target: Duration,
+) {
     val dates = (DAYS_SHOWN - 1 downTo 0).map { today.minusDays(it.toLong()) }
     ChartCard(
+        target = target,
         title = "Last $DAYS_SHOWN days",
         subtitle = "Hours inside office per day",
         showLop = true,
@@ -161,7 +183,7 @@ private fun DailyView(summaries: Map<LocalDate, DaySummary>, today: LocalDate) {
     val thisWeek = Periods.summarize(summaries, Periods.weekStart(today), today)
     TotalsCard("This week", thisWeek)
 
-    val worked = dates.reversed().mapNotNull { summaries[it] }.filter { it.worked || it.dayOff }
+    val worked = dates.reversed().map(summaryOf).filter { it.worked || it.dayOff }
     if (worked.isNotEmpty()) {
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(vertical = 8.dp)) {
@@ -176,11 +198,13 @@ private fun DailyView(summaries: Map<LocalDate, DaySummary>, today: LocalDate) {
 
 @Composable
 private fun PeriodView(
+    target: Duration,
     periods: List<PeriodSummary>,
     barLabel: (PeriodSummary) -> String,
     rowLabel: (PeriodSummary) -> String,
 ) {
     ChartCard(
+        target = target,
         title = "Average per working day",
         subtitle = "Hours inside office",
         bars = periods.map { Bar(barLabel(it), it.avgInside.hours(), it.avgBreaks.hours()) },
@@ -205,17 +229,17 @@ private fun PeriodView(
 }
 
 @Composable
-private fun ChartCard(title: String, subtitle: String, bars: List<Bar>, showLop: Boolean = false) {
+private fun ChartCard(target: Duration, title: String, subtitle: String, bars: List<Bar>, showLop: Boolean = false) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            BarChart(bars, target = 8f)
+            BarChart(bars, target = target.hours())
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Legend(MaterialTheme.colorScheme.primary, "Inside")
                 Legend(MaterialTheme.colorScheme.tertiary, "Break")
                 if (showLop) Legend(MaterialTheme.colorScheme.error, "LOP day")
-                Legend(MaterialTheme.colorScheme.onSurfaceVariant, "8h target")
+                Legend(MaterialTheme.colorScheme.onSurfaceVariant, "${target.formatShort()} target")
             }
         }
     }
@@ -242,7 +266,7 @@ private fun TotalsCard(title: String, p: PeriodSummary) {
             Row {
                 Total("Avg/day", p.avgInside.formatHm(), Modifier.weight(1f))
                 Total("LOP days", "${p.lopDays}", Modifier.weight(1f), warn = p.lopDays > 0)
-                Total("Late / under 8h", "${p.lateDays} / ${p.shortDays}", Modifier.weight(1f))
+                Total("Late / short", "${p.lateDays} / ${p.shortDays}", Modifier.weight(1f))
             }
             Row {
                 Total("WFH", "${p.wfhDays}", Modifier.weight(1f))

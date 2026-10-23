@@ -1,5 +1,6 @@
 package com.gkgsiva.tracker.domain
 
+import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
@@ -17,10 +18,24 @@ enum class DayType(val label: String) {
     /** Only first login and last logout count, no breaks; same LOP rules. */
     WFH("WFH"),
     HOLIDAY("Holiday"),
-    LEAVE("On leave");
+    LEAVE("On leave"),
+    /** Not chosen by hand: a weekly off day (e.g. Sunday) with nothing logged. */
+    WEEKLY_OFF("Weekly off");
 
     /** No login needed and never LOP. */
-    val isDayOff: Boolean get() = this == HOLIDAY || this == LEAVE
+    val isDayOff: Boolean get() = this == HOLIDAY || this == LEAVE || this == WEEKLY_OFF
+
+    /** Types the user picks for a day. */
+    val choosable: Boolean get() = this != WEEKLY_OFF
+
+    companion object {
+        /**
+         * The type a day is treated as: an explicit choice wins; otherwise a weekly off day counts
+         * as off unless something was logged on it.
+         */
+        fun effective(explicit: DayType?, date: LocalDate, hasPunches: Boolean, weeklyOffs: Set<DayOfWeek>): DayType =
+            explicit ?: if (!hasPunches && date.dayOfWeek in weeklyOffs) WEEKLY_OFF else OFFICE
+    }
 }
 
 /** Rules whose breach makes the day loss of pay, regardless of hours worked. */

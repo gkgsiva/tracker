@@ -33,4 +33,22 @@ interface PunchDao {
 
     @Query("DELETE FROM days")
     suspend fun deleteAllDays()
+
+    @Query("SELECT * FROM punches WHERE epochDay = :epochDay ORDER BY secondOfDay")
+    suspend fun punchesFor(epochDay: Long): List<PunchEntity>
+
+    @Query("SELECT * FROM days WHERE epochDay = :epochDay")
+    suspend fun day(epochDay: Long): DayEntity?
+
+    @Query("SELECT * FROM punches ORDER BY epochDay, secondOfDay")
+    suspend fun allPunches(): List<PunchEntity>
+
+    @Query("SELECT * FROM days ORDER BY epochDay")
+    suspend fun allDays(): List<DayEntity>
+
+    @Insert
+    suspend fun insertAll(punches: List<PunchEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDays(days: List<DayEntity>)
 }

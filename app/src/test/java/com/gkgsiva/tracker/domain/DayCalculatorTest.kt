@@ -187,6 +187,26 @@ class DayCalculatorTest {
     }
 
     @Test
+    fun weeklyOffAppliesOnlyWhenNothingIsLogged() {
+        val sunday = LocalDate.of(2026, 10, 25)
+        val offs = setOf(java.time.DayOfWeek.SUNDAY)
+        assertEquals(DayType.WEEKLY_OFF, DayType.effective(null, sunday, hasPunches = false, weeklyOffs = offs))
+        assertEquals(DayType.OFFICE, DayType.effective(null, sunday, hasPunches = true, weeklyOffs = offs))
+        assertEquals(DayType.LEAVE, DayType.effective(DayType.LEAVE, sunday, hasPunches = false, weeklyOffs = offs))
+        assertEquals(DayType.OFFICE, DayType.effective(null, sunday.minusDays(1), hasPunches = false, weeklyOffs = offs))
+        assertTrue(DayType.WEEKLY_OFF.isDayOff)
+    }
+
+    @Test
+    fun customRulesAreUsed() {
+        val rules = Rules(arriveBy = t(9, 30), leaveAfter = t(18, 0), requiredInside = Duration.ofMinutes(510))
+        val s = DayCalculator.summarize(day, listOf(inAt(9, 20), logoutAt(18, 0)), null, rules)
+        assertFalse(s.lop)
+        val short = DayCalculator.summarize(day, listOf(inAt(9, 20), logoutAt(17, 45)), null, rules)
+        assertEquals(listOf(LopReason.EARLY_EXIT, LopReason.UNDER_8H), short.lopReasons)
+    }
+
+    @Test
     fun onTimeFullDayIsNotLop() {
         val s = DayCalculator.summarize(day, listOf(inAt(8, 30), outAt(13, 0), inAt(13, 30), outAt(17, 5)), null)
         assertFalse(s.lop)

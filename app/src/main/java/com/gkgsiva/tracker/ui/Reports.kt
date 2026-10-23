@@ -44,7 +44,7 @@ object Reports {
         appendLine("Office Tracker · $title")
         appendLine("Days worked: ${p.daysWorked} (${p.wfhDays} WFH) · LOP days: ${p.lopDays}")
         appendLine("Total inside: ${p.totalInside.formatHm()} · Avg/day: ${p.avgInside.formatHm()} · Avg break: ${p.avgBreaks.formatHm()}")
-        appendLine("Late logins: ${p.lateDays} · Under 8h: ${p.shortDays}")
+        appendLine("Late logins: ${p.lateDays} · Short-hour days: ${p.shortDays}")
         appendLine("Holidays: ${p.holidays} · Leave days: ${p.leaveDays}")
         val listed = days.values
             .filter { (it.worked || it.dayOff) && it.date >= p.start && it.date <= p.endInclusive }
