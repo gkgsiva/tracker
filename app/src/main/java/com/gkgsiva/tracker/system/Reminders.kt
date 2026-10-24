@@ -14,14 +14,17 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.gkgsiva.tracker.R
 import com.gkgsiva.tracker.domain.DayStatus
+import com.gkgsiva.tracker.ui.Insights
 import com.gkgsiva.tracker.ui.MainActivity
 import com.gkgsiva.tracker.ui.formatClock
 import com.gkgsiva.tracker.ui.formatHm
+import com.gkgsiva.tracker.ui.metText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale
@@ -37,18 +40,25 @@ object Reminders {
     private const val BREAK = 3
     /** Silent: refreshes the status notification when the required hours are reached. */
     private const val TARGET = 4
+    /** Summary of the month that just ended, on the 1st. */
+    private const val MONTH = 5
+    private val MONTH_AT: LocalTime = LocalTime.of(10, 0)
     private const val EXTRA_KIND = "kind"
     private val LOGIN_LEAD: Duration = Duration.ofMinutes(15)
     private val BREAK_LEAD: Duration = Duration.ofMinutes(5)
 
     suspend fun reschedule(context: Context) {
         val am = context.getSystemService(AlarmManager::class.java)
-        listOf(LOGIN, LEAVE, BREAK, TARGET).forEach { am.cancel(pending(context, it)) }
+        listOf(LOGIN, LEAVE, BREAK, TARGET, MONTH).forEach { am.cancel(pending(context, it)) }
 
         val settings = SettingsStore.get(context)
         val now = LocalDateTime.now()
         val today = Tracker.summary(context, now.toLocalDate(), now)
 
+        if (settings.monthSummary) {
+            val thisMonth = now.toLocalDate().withDayOfMonth(1).atTime(MONTH_AT)
+            set(context, am, MONTH, if (thisMonth > now) thisMonth else thisMonth.plusMonths(1))
+        }
         if (settings.remindLogin) {
             // Next working day (today included) where the reminder time is still ahead.
             for (offset in 0L..14L) {
@@ -105,6 +115,21 @@ object Reminders {
             LEAVE -> if (s.status == DayStatus.INSIDE && s.targetMet && now.toLocalTime() >= rules.leaveAfter) {
                 notify(context, kind, "You can leave now", "${s.inside.formatHm()} inside today. Remember to log out.")
             }
+            MONTH -> {
+                val start = now.toLocalDate().withDayOfMonth(1).minusMonths(1)
+                val end = start.plusMonths(1).minusDays(1)
+                val days = generateSequence(start) { it.plusDays(1) }.takeWhile { it <= end }
+                    .associateWith { Tracker.summary(context, it, now) }
+                val o = Insights.outlook(start, end, now.toLocalDate(), rules) { days.getValue(it) }
+                val regularized = days.values.count { it.isRegularized }
+                val text = listOfNotNull(
+                    o.metText() ?: "No working days logged",
+                    "${o.lopDays} LOP",
+                    if (regularized > 0) "$regularized regularized" else null,
+                    "${o.done.formatHm()} inside",
+                ).joinToString(" · ")
+                notify(context, kind, "${start.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} summary", text)
+            }
             BREAK -> if (s.status == DayStatus.ON_BREAK) {
                 val returnBy = s.returnBy
                 if (returnBy != null && s.breakLeft > Duration.ofMinutes(1)) {
@@ -130,6 +155,7 @@ object Reminders {
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()

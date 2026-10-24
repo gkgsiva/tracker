@@ -95,11 +95,26 @@ class TrackerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Deletes every entry and day setting. */
+    /** Keeps a copy first so [undoClear] can bring everything back. */
     fun clearAll() = change {
+        Backup.saveBeforeClear(getApplication())
         db.withTransaction {
             dao.deleteAllPunches()
             dao.deleteAllDays()
         }
+    }
+
+    fun undoClear(onResult: (String) -> Unit) = viewModelScope.launch {
+        onResult(
+            runCatching { Backup.undoClear(getApplication()) }
+                .fold({ "Restored $it records" }, { "Undo failed: ${it.message}" })
+        )
+    }
+
+    /** Turns the weekly backup on for [folder] and writes the first one now. */
+    fun setBackupFolder(folder: Uri?) = change {
+        SettingsStore.save(getApplication(), settings.value.copy(backupFolder = folder?.toString()))
+        if (folder != null) Backup.resetAutoBackup(getApplication())
     }
 
     /** Records a login/break end (isIn), break start or logout right now. */

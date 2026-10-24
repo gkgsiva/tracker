@@ -1,6 +1,8 @@
 package com.gkgsiva.tracker.ui
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -41,11 +43,15 @@ import com.gkgsiva.tracker.BuildConfig
 import com.gkgsiva.tracker.domain.Rules
 import com.gkgsiva.tracker.domain.Settings
 import com.gkgsiva.tracker.domain.ThemeMode
+import com.gkgsiva.tracker.system.Backup
 import com.gkgsiva.tracker.system.GateMonitor
 import java.time.DayOfWeek
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -58,7 +64,7 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
 
     var editingTime by remember { mutableStateOf<TimeSetting?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
-    var pendingImport by remember { mutableStateOf<android.net.Uri?>(null) }
+    var pendingImport by remember { mutableStateOf<Uri?>(null) }
 
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     fun setReminder(s: Settings) {
@@ -87,6 +93,16 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
         permissionCheck++
         vm.refreshGate()
     }
+    val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, flags) }
+                .onSuccess { vm.setBackupFolder(uri); toast("Weekly backup on. The first one is saved now.") }
+                .onFailure { toast("Couldn't use that folder: ${it.message}") }
+        }
+    }
+    // Set after Clear data so it can be undone from this screen.
+    var justCleared by remember { mutableStateOf(false) }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         pendingImport = uri
     }
@@ -168,6 +184,11 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
                 settings.remindBreak,
             ) { setReminder(settings.copy(remindBreak = it)) }
             SwitchRow(
+                "Month summary",
+                "On the 1st: days that met ${rules.requiredInside.formatShort()}, LOP, regularized and total hours for the month just ended",
+                settings.monthSummary,
+            ) { setReminder(settings.copy(monthSummary = it)) }
+            SwitchRow(
                 "Status notification",
                 "While logged in: countdown to ${rules.requiredInside.formatShort()}, break used, and break / log out buttons on the lock screen",
                 settings.statusNotification,
@@ -219,6 +240,12 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
         }
 
         Section("Backup") {
+            if (justCleared) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("All data deleted.", Modifier.weight(1f), color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = { vm.undoClear(::toast); justCleared = false }) { Text("Undo") }
+                }
+            }
             Hint("Save everything to a CSV file (Drive, Downloads, …) and restore it on a new phone.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
@@ -230,6 +257,16 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
                     modifier = Modifier.weight(1f),
                 ) { Text("Import") }
             }
+            val folder = settings.backupFolder
+            SwitchRow(
+                "Weekly backup",
+                if (folder == null) "Saves a dated CSV to a folder you choose, once a week"
+                else "To ${Uri.parse(folder).lastPathSegment?.substringAfterLast(':') ?: "your folder"}" +
+                    Backup.lastAutoBackup(context).takeIf { it > 0 }?.let {
+                        " · last on " + Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(backupDate)
+                    }.orEmpty(),
+                folder != null,
+            ) { on -> if (on) folderLauncher.launch(null) else vm.setBackupFolder(null) }
             OutlinedButton(
                 onClick = { confirmClear = true },
                 modifier = Modifier.fillMaxWidth(),
@@ -270,10 +307,10 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
             title = { Text("Delete all data?") },
-            text = { Text("This permanently deletes every login, break, logout, and WFH, holiday and leave day. Export a backup first if you might need it.") },
+            text = { Text("This deletes every login, break, logout, and WFH, holiday and leave day. A copy is kept on the phone so you can undo it right after.") },
             confirmButton = {
                 TextButton(
-                    onClick = { vm.clearAll(); confirmClear = false },
+                    onClick = { vm.clearAll(); confirmClear = false; justCleared = true },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
                 ) { Text("Delete everything") }
             },
@@ -281,6 +318,8 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
         )
     }
 }
+
+private val backupDate = DateTimeFormatter.ofPattern("d MMM")
 
 private enum class TimeSetting(val label: String, val get: (Rules) -> LocalTime, val set: (Rules, LocalTime) -> Rules) {
     ARRIVE("Log in by", { it.arriveBy }, { r, t -> r.copy(arriveBy = t) }),

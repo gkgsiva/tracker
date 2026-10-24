@@ -42,7 +42,9 @@ if a recent day has no logout, Today (and the morning login reminder) asks for t
 
 **Settings** lets you change the rules (core login-by and leave-after, hours inside, official start and end), choose light, dark or system theme, pick weekly
 off days (Saturday and Sunday by default), turn reminders on or off (login reminder 15 minutes before the
-deadline, "you can leave now", and "break allowance used"), export or import a CSV backup, and clear all data.
+deadline, "you can leave now", and "break allowance used"), export or import a CSV backup, turn on a weekly automatic backup to a folder you pick (a dated CSV each
+week), and clear all data (a copy is kept so you can undo it). On the 1st a notification sums up the month
+that just ended: days that met 8h, LOP, regularized days and total hours.
 
 While you're logged in, an ongoing notification counts down to the required hours (or up through your break)
 and has Start break / End break / Log out buttons that work from the lock screen. A quick settings tile
