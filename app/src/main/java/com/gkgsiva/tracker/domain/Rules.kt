@@ -22,4 +22,6 @@ data class Settings(
     val remindLeave: Boolean = true,
     /** Notify when the break allowance runs out during a break. */
     val remindBreak: Boolean = true,
+    /** Ongoing notification with a countdown while logged in. */
+    val statusNotification: Boolean = true,
 )

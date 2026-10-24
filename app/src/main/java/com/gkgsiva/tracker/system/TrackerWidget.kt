@@ -95,7 +95,8 @@ class TrackerWidget : AppWidgetProvider() {
             return views
         }
 
-        private enum class Action(val label: String, val isIn: Boolean, val isLogout: Boolean) {
+        /** A punch the widget, status notification and quick settings tile can trigger. */
+        enum class Action(val label: String, val isIn: Boolean, val isLogout: Boolean) {
             LOGIN("Log in", true, false),
             BREAK_START("Start break", false, false),
             BREAK_END("End break", true, false),
@@ -109,16 +110,18 @@ class TrackerWidget : AppWidgetProvider() {
             }
             views.setViewVisibility(viewId, View.VISIBLE)
             views.setTextViewText(viewId, action.label)
+            views.setOnClickPendingIntent(viewId, punchIntent(context, action))
+        }
+
+        /** Broadcast that records [action] right now, without opening the app. */
+        fun punchIntent(context: Context, action: Action): PendingIntent {
             val intent = Intent(context, TrackerWidget::class.java)
                 .setAction(ACTION_PUNCH)
                 .putExtra(EXTRA_IN, action.isIn)
                 .putExtra(EXTRA_LOGOUT, action.isLogout)
-            views.setOnClickPendingIntent(
-                viewId,
-                PendingIntent.getBroadcast(
-                    context, 100 + action.ordinal, intent,
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                ),
+            return PendingIntent.getBroadcast(
+                context, 100 + action.ordinal, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
         }
     }

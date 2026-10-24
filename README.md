@@ -37,6 +37,10 @@ ahead. History lists what's planned and how much leave you've taken this year.
 off days (Saturday and Sunday by default), turn reminders on or off (login reminder 15 minutes before the
 deadline, "you can leave now", and "break allowance used"), export or import a CSV backup, and clear all data.
 
+While you're logged in, an ongoing notification counts down to the required hours (or up through your break)
+and has Start break / End break / Log out buttons that work from the lock screen. A quick settings tile
+("Office break") starts and ends breaks with one tap.
+
 There's also a home-screen widget (long-press the home screen → Widgets → Office Tracker) with a live counter
 and one-tap Log in / Start break / End break / Log out.
 

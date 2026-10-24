@@ -31,6 +31,7 @@ object SettingsStore {
             .putBoolean("remindLogin", settings.remindLogin)
             .putBoolean("remindLeave", settings.remindLeave)
             .putBoolean("remindBreak", settings.remindBreak)
+            .putBoolean("statusNotification", settings.statusNotification)
             .apply()
         (flow(context) as MutableStateFlow).value = settings
     }
@@ -52,6 +53,7 @@ object SettingsStore {
             remindLogin = p.getBoolean("remindLogin", d.remindLogin),
             remindLeave = p.getBoolean("remindLeave", d.remindLeave),
             remindBreak = p.getBoolean("remindBreak", d.remindBreak),
+            statusNotification = p.getBoolean("statusNotification", d.statusNotification),
         )
     }
 }

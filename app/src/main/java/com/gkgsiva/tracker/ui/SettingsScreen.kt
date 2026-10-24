@@ -128,9 +128,14 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
             ) { setReminder(settings.copy(remindLeave = it)) }
             SwitchRow(
                 "Long break",
-                "When a break uses up the ${rules.breakAllowance.formatShort()} allowance",
+                "5 minutes before the ${rules.breakAllowance.formatShort()} allowance runs out, and when it does",
                 settings.remindBreak,
             ) { setReminder(settings.copy(remindBreak = it)) }
+            SwitchRow(
+                "Status notification",
+                "While logged in: countdown to ${rules.requiredInside.formatShort()}, break used, and break / log out buttons on the lock screen",
+                settings.statusNotification,
+            ) { setReminder(settings.copy(statusNotification = it)) }
         }
 
         Section("Backup") {
@@ -152,7 +157,10 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
             ) { Text("Clear all data") }
         }
 
-        Hint("Tip: long-press your home screen → Widgets → Office Tracker for one-tap login and breaks.")
+        Hint(
+            "Tips: long-press your home screen → Widgets → Office Tracker for one-tap login and breaks. " +
+                "Edit your quick settings panel to add the Office Tracker tile for breaks from the lock screen."
+        )
     }
 
     editingTime?.let { which ->

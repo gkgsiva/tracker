@@ -58,5 +58,7 @@ object Tracker {
     suspend fun onChanged(context: Context) {
         TrackerWidget.updateAll(context)
         Reminders.reschedule(context)
+        StatusNotification.update(context, summary(context, LocalDate.now()))
+        BreakTileService.requestUpdate(context)
     }
 }

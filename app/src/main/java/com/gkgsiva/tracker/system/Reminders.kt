@@ -33,12 +33,15 @@ object Reminders {
     private const val LOGIN = 1
     private const val LEAVE = 2
     private const val BREAK = 3
+    /** Silent: refreshes the status notification when the required hours are reached. */
+    private const val TARGET = 4
     private const val EXTRA_KIND = "kind"
     private val LOGIN_LEAD: Duration = Duration.ofMinutes(15)
+    private val BREAK_LEAD: Duration = Duration.ofMinutes(5)
 
     suspend fun reschedule(context: Context) {
         val am = context.getSystemService(AlarmManager::class.java)
-        listOf(LOGIN, LEAVE, BREAK).forEach { am.cancel(pending(context, it)) }
+        listOf(LOGIN, LEAVE, BREAK, TARGET).forEach { am.cancel(pending(context, it)) }
 
         val settings = SettingsStore.get(context)
         val now = LocalDateTime.now()
@@ -56,11 +59,18 @@ object Reminders {
                 break
             }
         }
+        if (today.status == DayStatus.INSIDE && !today.targetMet) {
+            set(context, am, TARGET, now.plus(today.remaining).plusSeconds(1))
+        }
         if (settings.remindLeave && today.status == DayStatus.INSIDE) {
             today.expectedLeave?.let { set(context, am, LEAVE, now.toLocalDate().atTime(it)) }
         }
         if (settings.remindBreak && today.status == DayStatus.ON_BREAK) {
-            today.returnBy?.let { set(context, am, BREAK, now.toLocalDate().atTime(it)) }
+            // Warn a few minutes before the allowance runs out, then again when it does.
+            today.returnBy?.let { returnBy ->
+                val end = now.toLocalDate().atTime(returnBy)
+                set(context, am, BREAK, if (end.minus(BREAK_LEAD) > now) end.minus(BREAK_LEAD) else end)
+            }
         }
     }
 
@@ -90,10 +100,15 @@ object Reminders {
                 notify(context, kind, "You can leave now", "${s.inside.formatHm()} inside today. Remember to log out.")
             }
             BREAK -> if (s.status == DayStatus.ON_BREAK) {
-                notify(context, kind, "Break allowance used", "You've had ${s.breaks.formatHm()} of break today.")
+                val returnBy = s.returnBy
+                if (returnBy != null && s.breakLeft > Duration.ofMinutes(1)) {
+                    notify(context, kind, "Break ends at ${returnBy.formatClock()}", "${s.breakLeft.formatHm()} of break allowance left.")
+                } else {
+                    notify(context, kind, "Break allowance used", "You've had ${s.breaks.formatHm()} of break today.")
+                }
             }
         }
-        reschedule(context)
+        Tracker.onChanged(context)
     }
 
     private fun notify(context: Context, id: Int, title: String, text: String) {

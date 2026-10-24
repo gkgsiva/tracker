@@ -30,6 +30,20 @@
                 android:resource="@xml/widget_info" />
         </receiver>
 
+        <service
+            android:name=".system.BreakTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_notification"
+            android:label="Office break"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false" />
+        </service>
+
         <receiver
             android:name=".system.Reminders$ReminderReceiver"
             android:exported="false" />
