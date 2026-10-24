@@ -57,7 +57,7 @@ object StatusNotification {
             .setUsesChronometer(true)
             .setShowWhen(true)
 
-        val breakText = "Break ${s.breaks.formatHm()} of ${rules.breakAllowance.formatShort()}"
+        val breakText = "Break ${s.breaks.formatHm()} of ${s.breakAllowance.formatShort()}"
         if (s.status == DayStatus.INSIDE) {
             val title = if (s.wfh) "Working from home" else "Inside office"
             if (s.targetMet) {
@@ -80,7 +80,7 @@ object StatusNotification {
             builder.setContentTitle("On break · ${s.remaining.formatHm()} still to go")
                 .setWhen(now - s.breaks.toMillis())
                 .setContentText(
-                    s.returnBy?.let { "Back by ${it.formatClock()} to stay within ${rules.breakAllowance.formatShort()}" }
+                    s.returnBy?.let { "Back by ${it.formatClock()} to leave by ${rules.officeEnd.formatClock()}" }
                         ?: "$breakText · over the allowance"
                 )
                 .addAction(0, "End break", TrackerWidget.punchIntent(context, Action.BREAK_END))

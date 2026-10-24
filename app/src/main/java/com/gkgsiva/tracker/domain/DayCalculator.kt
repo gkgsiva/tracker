@@ -50,7 +50,9 @@ data class DaySummary(
     val breaks: Duration,
     val breakCount: Int,
     val remaining: Duration,
-    /** Break time left in the 1h guideline; negative when over. A longer break isn't LOP by itself. */
+    /** Break that still lets you leave by the official end time; see [Rules.breakAllowance]. */
+    val breakAllowance: Duration,
+    /** Break time left in [breakAllowance]; negative when over. A longer break isn't LOP by itself. */
     val breakLeft: Duration,
     /** Earliest time you can leave and satisfy both the 8h and 5 PM rules (live days only). */
     val expectedLeave: LocalTime?,
@@ -138,6 +140,7 @@ object DayCalculator {
         }
 
         var returnBy: LocalTime? = null
+        val allowance = rules.breakAllowance(firstIn)
         val status = when {
             type.isDayOff -> DayStatus.DAY_OFF
             firstIn == null -> DayStatus.NOT_STARTED
@@ -149,7 +152,7 @@ object DayCalculator {
             now != null && outSince != null && !loggedOut -> {
                 if (now > outSince) breaks += Duration.between(outSince, now)
                 breakCount++
-                val left = rules.breakAllowance - breaks
+                val left = allowance - breaks
                 if (!left.isNegative) returnBy = now.plus(left)
                 DayStatus.ON_BREAK
             }
@@ -171,7 +174,8 @@ object DayCalculator {
             breaks = breaks,
             breakCount = breakCount,
             remaining = remaining,
-            breakLeft = rules.breakAllowance - breaks,
+            breakAllowance = allowance,
+            breakLeft = allowance - breaks,
             expectedLeave = expectedLeave,
             returnBy = returnBy,
             rules = rules,

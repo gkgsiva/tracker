@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.BuildConfig
+import com.gkgsiva.tracker.domain.Rules
 import com.gkgsiva.tracker.domain.Settings
 import com.gkgsiva.tracker.system.GateMonitor
 import java.time.DayOfWeek
@@ -94,8 +95,8 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Section("Office rules") {
-            SettingRow("Log in by", rules.arriveBy.formatClock(), onClick = { editingTime = TimeSetting.ARRIVE })
-            SettingRow("Leave after", rules.leaveAfter.formatClock(), onClick = { editingTime = TimeSetting.LEAVE })
+            Hint("Core hours: logging in after this or leaving before this is LOP.")
+            TimeSetting.entries.take(2).forEach { SettingRow(it.label, it.get(rules).formatClock(), onClick = { editingTime = it }) }
             Stepper(
                 "Hours inside",
                 rules.requiredInside,
@@ -103,13 +104,12 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
                 min = Duration.ofHours(1),
                 max = Duration.ofHours(12),
             ) { update(settings.copy(rules = rules.copy(requiredInside = it))) }
-            Stepper(
-                "Break allowance",
-                rules.breakAllowance,
-                step = Duration.ofMinutes(15),
-                min = Duration.ZERO,
-                max = Duration.ofHours(3),
-            ) { update(settings.copy(rules = rules.copy(breakAllowance = it))) }
+            Hint(
+                "Official hours set your break: from login to ${rules.officeEnd.formatClock()}, minus " +
+                    "${rules.requiredInside.formatShort()}. Logging in at ${rules.officeStart.formatClock()} gives " +
+                    "${rules.breakAllowance(null).formatShort()}, earlier gives more. A longer break isn't LOP; you just stay later."
+            )
+            TimeSetting.entries.drop(2).forEach { SettingRow(it.label, it.get(rules).formatClock(), onClick = { editingTime = it }) }
         }
 
         Section("Weekly off days") {
@@ -149,7 +149,7 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
             ) { setReminder(settings.copy(remindLeave = it)) }
             SwitchRow(
                 "Long break",
-                "5 minutes before the ${rules.breakAllowance.formatShort()} allowance runs out, and when it does",
+                "5 minutes before your break allowance runs out, and when it does",
                 settings.remindBreak,
             ) { setReminder(settings.copy(remindBreak = it)) }
             SwitchRow(
@@ -231,11 +231,11 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
 
     editingTime?.let { which ->
         TimeDialog(
-            title = if (which == TimeSetting.ARRIVE) "Log in by" else "Leave after",
-            initial = if (which == TimeSetting.ARRIVE) rules.arriveBy else rules.leaveAfter,
+            title = which.label,
+            initial = which.get(rules),
             onDismiss = { editingTime = null },
             onPick = { t ->
-                update(settings.copy(rules = if (which == TimeSetting.ARRIVE) rules.copy(arriveBy = t) else rules.copy(leaveAfter = t)))
+                update(settings.copy(rules = which.set(rules, t)))
                 editingTime = null
             },
         )
@@ -267,7 +267,12 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
     }
 }
 
-private enum class TimeSetting { ARRIVE, LEAVE }
+private enum class TimeSetting(val label: String, val get: (Rules) -> LocalTime, val set: (Rules, LocalTime) -> Rules) {
+    ARRIVE("Log in by", { it.arriveBy }, { r, t -> r.copy(arriveBy = t) }),
+    LEAVE("Leave after", { it.leaveAfter }, { r, t -> r.copy(leaveAfter = t) }),
+    OFFICE_START("Official start", { it.officeStart }, { r, t -> r.copy(officeStart = t) }),
+    OFFICE_END("Official end", { it.officeEnd }, { r, t -> r.copy(officeEnd = t) }),
+}
 
 private const val DEFAULT_GATE_RADIUS = 100
 

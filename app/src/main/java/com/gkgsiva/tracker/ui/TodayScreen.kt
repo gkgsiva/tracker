@@ -201,8 +201,8 @@ fun TodayScreen(
                     "Break",
                     summary.breaks.formatHm(),
                     Modifier.weight(1f),
-                    sub = if (summary.breakExceeded) "${summary.breakLeft.negated().formatHm()} over ${rules.breakAllowance.formatShort()}"
-                    else "${summary.breakLeft.formatHm()} of ${rules.breakAllowance.formatShort()} left",
+                    sub = if (summary.breakExceeded) "${summary.breakLeft.negated().formatHm()} over ${summary.breakAllowance.formatShort()}"
+                    else "${summary.breakLeft.formatHm()} of ${summary.breakAllowance.formatShort()} left",
                 )
             }
             StatTile("To go", summary.remaining.formatHm(), Modifier.weight(1f), sub = "of ${rules.requiredInside.formatShort()}")
@@ -535,7 +535,7 @@ private fun DetailsCard(s: DaySummary) {
                 warn = s.lateArrival,
             )
             if (!s.wfh) DetailLine("Breaks taken", "${s.breakCount}")
-            s.returnBy?.let { DetailLine("Back by (to stay within ${s.rules.breakAllowance.formatShort()})", it.formatClock()) }
+            s.returnBy?.let { DetailLine("Back by (to leave by ${s.rules.officeEnd.formatClock()})", it.formatClock()) }
             s.expectedLeave?.let { DetailLine("You can leave at", it.formatClock()) }
             if (s.status == DayStatus.DONE && s.lastOut != null) {
                 DetailLine(
