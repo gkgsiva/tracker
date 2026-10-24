@@ -27,7 +27,8 @@ object SettingsStore {
             .putInt("arriveBy", r.arriveBy.toSecondOfDay() / 60)
             .putInt("leaveAfter", r.leaveAfter.toSecondOfDay() / 60)
             .putLong("requiredMinutes", r.requiredInside.toMinutes())
-            .putLong("breakMinutes", r.breakAllowance.toMinutes())
+            .putInt("officeStart", r.officeStart.toSecondOfDay() / 60)
+            .putInt("officeEnd", r.officeEnd.toSecondOfDay() / 60)
             .putStringSet("weeklyOffs", settings.weeklyOffs.map { it.name }.toSet())
             .putBoolean("remindLogin", settings.remindLogin)
             .putBoolean("remindLeave", settings.remindLeave)
@@ -55,7 +56,8 @@ object SettingsStore {
                 arriveBy = LocalTime.ofSecondOfDay(p.getInt("arriveBy", d.rules.arriveBy.toSecondOfDay() / 60) * 60L),
                 leaveAfter = LocalTime.ofSecondOfDay(p.getInt("leaveAfter", d.rules.leaveAfter.toSecondOfDay() / 60) * 60L),
                 requiredInside = Duration.ofMinutes(p.getLong("requiredMinutes", d.rules.requiredInside.toMinutes())),
-                breakAllowance = Duration.ofMinutes(p.getLong("breakMinutes", d.rules.breakAllowance.toMinutes())),
+                officeStart = LocalTime.ofSecondOfDay(p.getInt("officeStart", d.rules.officeStart.toSecondOfDay() / 60) * 60L),
+                officeEnd = LocalTime.ofSecondOfDay(p.getInt("officeEnd", d.rules.officeEnd.toSecondOfDay() / 60) * 60L),
             ),
             weeklyOffs = p.getStringSet("weeklyOffs", null)
                 ?.mapNotNull { name -> DayOfWeek.entries.firstOrNull { it.name == name } }

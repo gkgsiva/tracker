@@ -136,28 +136,28 @@ fun HistoryScreen(
     }
 }
 
-/** Hours against target for this week and month, and what's still needed. */
+/** This week and month: days that met the required hours, and working days left. */
 @Composable
 private fun TargetsCard(week: Outlook, month: Outlook, required: Duration) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Targets", style = MaterialTheme.typography.titleMedium)
+            Text("This week and month", style = MaterialTheme.typography.titleMedium)
             listOf("This week" to week, "This month" to month).forEach { (label, o) ->
                 Column {
                     Row {
                         Text(label, Modifier.weight(1f), fontWeight = FontWeight.Medium)
-                        Text("${o.done.formatHm()} of ${o.target.formatShort()}")
+                        Text(listOfNotNull("${o.done.formatHm()} clocked", o.metText()).joinToString(" · "))
                     }
                     Text(
                         o.paceText() + if (o.lopDays > 0) " · ${o.lopDays} LOP" else "",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (o.balance.isNegative) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (o.daysShort > 0 || o.lopDays > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             Text(
-                "Planned leave, holidays and weekly offs are left out of the target. " +
-                    "Extra hours don't carry over for LOP: each day still needs ${required.formatShort()} on its own.",
+                "Every working day needs ${required.formatShort()} inside on its own; extra hours on one day don't make up " +
+                    "for another. Planned leave, holidays and weekly offs aren't counted.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

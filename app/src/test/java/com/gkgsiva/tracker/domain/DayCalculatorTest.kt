@@ -54,17 +54,38 @@ class DayCalculatorTest {
         val s = DayCalculator.summarize(day, punches, now = t(12, 20))
         assertEquals(DayStatus.ON_BREAK, s.status)
         assertEquals(Duration.ofMinutes(20), s.breaks)
-        assertEquals(t(13, 0), s.returnBy)
+        // Logged in at 8:00, so 1h30m of break still lets you leave by 5:30.
+        assertEquals(Duration.ofMinutes(90), s.breakAllowance)
+        assertEquals(t(13, 30), s.returnBy)
         assertEquals(Duration.ofHours(4), s.remaining)
     }
 
     @Test
     fun exceedingBreakAllowanceIsFlagged() {
         val punches = listOf(inAt(8, 0), outAt(12, 0))
-        val s = DayCalculator.summarize(day, punches, now = t(13, 15))
+        val s = DayCalculator.summarize(day, punches, now = t(13, 45))
         assertTrue(s.breakExceeded)
         assertEquals(Duration.ofMinutes(-15), s.breakLeft)
         assertNull(s.returnBy)
+    }
+
+    @Test
+    fun breakAllowanceFollowsLoginTime() {
+        val rules = Rules()
+        assertEquals(Duration.ofHours(1), rules.breakAllowance(null))
+        assertEquals(Duration.ofHours(1), rules.breakAllowance(t(8, 30)))
+        assertEquals(Duration.ofMinutes(90), rules.breakAllowance(t(8, 0)))
+        assertEquals(Duration.ofMinutes(30), rules.breakAllowance(t(9, 0)))
+        assertEquals(Duration.ZERO, rules.breakAllowance(t(9, 45)))
+    }
+
+    @Test
+    fun longBreakIsNotLop() {
+        val punches = listOf(inAt(8, 30), outAt(12, 0), inAt(13, 30), logoutAt(18, 0))
+        val s = DayCalculator.summarize(day, punches, now = t(18, 5))
+        assertTrue(s.breakExceeded)
+        assertTrue(s.targetMet)
+        assertFalse(s.lop)
     }
 
     @Test

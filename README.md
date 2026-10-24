@@ -2,9 +2,10 @@
 
 A small Android app for tracking office hours under these rules:
 
-- Log in before **9:00 AM**, leave after **5:00 PM**
-- **8 hours** inside the office every day
-- About **1 hour** of total break time (a longer break is fine as long as the rules above are met)
+- Core hours: log in by **9:00 AM**, leave after **5:00 PM**
+- **8 hours** inside the office every day (hours don't carry over between days)
+- Official hours **8:30 AM to 5:30 PM** set the break: login to 5:30 PM minus 8h, so an 8:30 login gives
+  **1 hour**, an earlier login more and a later one less (a longer break is fine; you just stay later)
 
 Breaking any one of the first three rules makes the day **LOP** (loss of pay), even with more than 8 hours
 inside: a late login, leaving before 5 PM, or less than 8 hours inside. A late login shows as LOP right away;
@@ -33,7 +34,7 @@ holiday and leave days separately. The share icon sends a text report for a day,
 Tap the date on Today to jump to any day, including future dates, so you can plan leave and holidays
 ahead. History lists what's planned and how much leave you've taken this year.
 
-**Settings** lets you change the rules (login by, leave after, hours inside, break allowance), pick weekly
+**Settings** lets you change the rules (core login-by and leave-after, hours inside, official start and end), pick weekly
 off days (Saturday and Sunday by default), turn reminders on or off (login reminder 15 minutes before the
 deadline, "you can leave now", and "break allowance used"), export or import a CSV backup, and clear all data.
 

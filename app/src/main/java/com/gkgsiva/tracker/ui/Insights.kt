@@ -7,35 +7,40 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 
-/** Hours against target for a week or month, with what's still needed. */
+/**
+ * A week or month at a glance. Hours don't pool: every working day needs the full required hours
+ * on its own, so this counts days that met it rather than a total to catch up on.
+ */
 data class Outlook(
     val start: LocalDate,
     val endInclusive: LocalDate,
-    /** Required hours × working days (planned leave, holidays and weekly offs excluded). */
-    val target: Duration,
+    /** Required inside time for each working day. */
+    val perDay: Duration,
+    /** Time clocked inside so far, as a record. */
     val done: Duration,
-    /** Done minus required hours for the working days already finished: positive is ahead. */
-    val balance: Duration,
+    /** Finished working days that reached [perDay]. */
+    val daysMet: Int,
+    /** Finished working days that fell short of [perDay]. */
+    val daysShort: Int,
     /** Working days left, today included while it's still running. */
     val daysLeft: Int,
-    /** Average needed per remaining working day to reach [target]; null when no days are left. */
-    val neededPerDay: Duration?,
     val lopDays: Int,
 ) {
-    val remaining: Duration get() = (target - done).coerceAtLeast(Duration.ZERO)
+    val daysFinished: Int get() = daysMet + daysShort
 }
 
-/** One-line pace summary, e.g. "Ahead by 1h 10m · need 7h 50m/day over 2 days". */
+/** One-line summary, e.g. "5 working days left · 8h each · 1 day short". */
 fun Outlook.paceText(): String = buildList {
-    when {
-        balance.isNegative -> add("Behind by ${balance.negated().formatHm()}")
-        balance > Duration.ZERO -> add("Ahead by ${balance.formatHm()}")
-        else -> add("On pace")
-    }
-    val perDay = neededPerDay
-    if (perDay != null && remaining > Duration.ZERO) add("need ${perDay.formatHm()}/day over $daysLeft day${if (daysLeft == 1) "" else "s"}")
-    else if (remaining == Duration.ZERO) add("target reached")
+    add(
+        if (daysLeft > 0) "$daysLeft working day${if (daysLeft == 1) "" else "s"} left · ${perDay.formatShort()} each"
+        else "No working days left"
+    )
+    if (daysShort > 0) add("$daysShort day${if (daysShort == 1) "" else "s"} short of ${perDay.formatShort()}")
 }.joinToString(" · ")
+
+/** e.g. "3 of 4 days met 8h"; null before any working day has finished. */
+fun Outlook.metText(): String? =
+    if (daysFinished == 0) null else "$daysMet of $daysFinished day${if (daysFinished == 1) "" else "s"} met ${perDay.formatShort()}"
 
 /** Whether today is heading for LOP, and why. */
 data class Forecast(val atRisk: Boolean, val message: String)
@@ -55,20 +60,16 @@ object Insights {
     ): Outlook {
         val days = generateSequence(start) { it.plusDays(1) }.takeWhile { it <= endInclusive }.map(summaryOf).toList()
         val counted = days.filter { !it.dayOff && (it.date >= today || it.worked) }
-        val completed = counted.filter { it.date < today || (it.date == today && it.finished) }
-        val left = counted.size - completed.size
-        val target = rules.requiredInside.multipliedBy(counted.size.toLong())
-        val done = counted.fold(Duration.ZERO) { acc, d -> acc + d.inside }
-        val doneCompleted = completed.fold(Duration.ZERO) { acc, d -> acc + d.inside }
-        val remaining = (target - done).coerceAtLeast(Duration.ZERO)
+        val finished = counted.filter { it.date < today || (it.date == today && it.finished) }
+        val met = finished.count { it.inside >= rules.requiredInside }
         return Outlook(
             start = start,
             endInclusive = endInclusive,
-            target = target,
-            done = done,
-            balance = doneCompleted - rules.requiredInside.multipliedBy(completed.size.toLong()),
-            daysLeft = left,
-            neededPerDay = if (left > 0) remaining.dividedBy(left.toLong()) else null,
+            perDay = rules.requiredInside,
+            done = counted.fold(Duration.ZERO) { acc, d -> acc + d.inside },
+            daysMet = met,
+            daysShort = finished.size - met,
+            daysLeft = counted.size - finished.size,
             lopDays = days.count { it.lop },
         )
     }

@@ -4,13 +4,25 @@ import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalTime
 
-/** Office timing policy. */
+/**
+ * Office timing policy. [arriveBy] and [leaveAfter] are the core hours (breaking either is LOP);
+ * [officeStart] to [officeEnd] are the official hours, which set how much break you get.
+ */
 data class Rules(
     val arriveBy: LocalTime = LocalTime.of(9, 0),
     val leaveAfter: LocalTime = LocalTime.of(17, 0),
     val requiredInside: Duration = Duration.ofHours(8),
-    val breakAllowance: Duration = Duration.ofHours(1),
-)
+    val officeStart: LocalTime = LocalTime.of(8, 30),
+    val officeEnd: LocalTime = LocalTime.of(17, 30),
+) {
+    /**
+     * Break you can take and still leave by [officeEnd]: the time from login (or [officeStart]
+     * before logging in) to [officeEnd], minus the required hours. Logging in at 8:30 gives 1h,
+     * earlier gives more, later gives less. Going over isn't LOP; you just stay later.
+     */
+    fun breakAllowance(firstIn: LocalTime?): Duration =
+        (Duration.between(firstIn ?: officeStart, officeEnd) - requiredInside).coerceAtLeast(Duration.ZERO)
+}
 
 /** Everything the user can change in Settings. */
 data class Settings(
