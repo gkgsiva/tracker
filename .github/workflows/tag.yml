@@ -1,7 +1,9 @@
 name: Release
 
 # Each push to main that brings a new versionName (from app/build.gradle.kts) tags it v<versionName>
-# and publishes a GitHub Release with the APK as office-tracker-<version>.apk.
+# and publishes a GitHub Release with the APK as office-tracker-<version>.apk and the user guide
+# (docs/user-guide.md) as office-tracker-<version>-user-guide.pdf. A push that doesn't change the
+# version still refreshes the guide PDF on the latest release, so guide fixes reach it too.
 # Run it by hand to (re)publish an older version, e.g. tag=v1.0 sha=568ddc5.
 on:
   push:
@@ -27,6 +29,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Build user guide PDF
+        # From the commit that triggered the run, before Pick version checks out the release.
+        run: |
+          [ -f docs/user-guide.md ] || exit 0
+          pip install --quiet markdown
+          OUT="$RUNNER_TEMP/guide"
+          mkdir -p "$OUT/screenshots"
+          cp docs/screenshots/*.png docs/screenshots/*.svg "$OUT/screenshots/"
+          python3 docs/build_guide.py docs/user-guide.md "$OUT/index.html"
+          google-chrome --headless=new --no-sandbox --disable-gpu --no-pdf-header-footer \
+            --virtual-time-budget=15000 --print-to-pdf="$RUNNER_TEMP/user-guide.pdf" "file://$OUT/index.html"
+          ls -l "$RUNNER_TEMP/user-guide.pdf"
       - name: Pick version
         id: pick
         run: |
@@ -37,7 +51,10 @@ jobs:
             TAG="v$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)"
             SHA="$GITHUB_SHA"
             if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-              echo "$TAG already released"
+              echo "$TAG already released; refreshing its user guide only"
+              echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+              echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+              echo "guide_only=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
           fi
@@ -52,23 +69,31 @@ jobs:
           git checkout -q "$SHA"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-      - if: steps.pick.outputs.tag
+      - if: steps.pick.outputs.tag && !steps.pick.outputs.guide_only
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-      - if: steps.pick.outputs.tag
+      - if: steps.pick.outputs.tag && !steps.pick.outputs.guide_only
         uses: gradle/actions/setup-gradle@v4
       - name: Build APK
-        if: steps.pick.outputs.tag
+        if: steps.pick.outputs.tag && !steps.pick.outputs.guide_only
         run: ./gradlew assembleDebug
       - name: Publish release
         if: steps.pick.outputs.tag
         run: |
           TAG="${{ steps.pick.outputs.tag }}"
-          APK="office-tracker-${{ steps.pick.outputs.version }}.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "$APK"
+          VERSION="${{ steps.pick.outputs.version }}"
+          APK="office-tracker-$VERSION.apk"
+          GUIDE="office-tracker-$VERSION-user-guide.pdf"
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag \
-            --title "Office Tracker ${{ steps.pick.outputs.version }}" \
-            --notes "Tap $APK below on your phone to download and install it."
-          gh release upload "$TAG" "$APK" --clobber
+            --title "Office Tracker $VERSION" \
+            --notes "Tap $APK below on your phone to download and install it. $GUIDE explains every feature."
+          if [ -z "${{ steps.pick.outputs.guide_only }}" ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk "$APK"
+            gh release upload "$TAG" "$APK" --clobber
+          fi
+          if [ -f "$RUNNER_TEMP/user-guide.pdf" ]; then
+            cp "$RUNNER_TEMP/user-guide.pdf" "$GUIDE"
+            gh release upload "$TAG" "$GUIDE" --clobber
+          fi
