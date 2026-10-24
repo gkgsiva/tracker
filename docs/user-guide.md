@@ -8,6 +8,9 @@ The screenshots come from the real app running on an Android emulator with demo 
 clock set to Wednesday 21 October 2026, 2:20 PM. Colors on your phone follow your wallpaper
 (Android 12 and later), so they may look different.
 
+A PDF copy of this guide, `office-tracker-<version>-user-guide.pdf`, is attached to each version on the
+[Releases page](https://github.com/gkgsiva/tracker/releases), ready to share.
+
 **Contents**
 
 1. [Installing and updating](#1-installing-and-updating)

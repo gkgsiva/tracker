@@ -1,6 +1,7 @@
 # Office Tracker
 
-A small Android app for tracking office hours under these rules:
+A small Android app for tracking office hours under these rules (the [user guide](docs/user-guide.md)
+explains every screen; each release also carries it as a PDF):
 
 - Core hours: log in by **9:00 AM**, leave after **5:00 PM**
 - **8 hours** inside the office every day (hours don't carry over between days)
