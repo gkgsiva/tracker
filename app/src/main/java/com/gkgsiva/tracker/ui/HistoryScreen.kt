@@ -62,11 +62,12 @@ private const val MONTHS_SHOWN = 6
 fun HistoryScreen(
     punchesByDay: Map<LocalDate, List<PunchEntity>>,
     dayTypes: Map<LocalDate, DayType>,
+    regularized: Map<LocalDate, String>,
     settings: Settings,
 ) {
     val now by rememberNow()
     val today = now.toLocalDate()
-    val summaries = summarizeAll(punchesByDay, dayTypes, now, settings)
+    val summaries = summarizeAll(punchesByDay, dayTypes, now, settings, regularized)
     /** Also covers days with nothing stored, such as weekly offs. */
     fun summaryOf(date: LocalDate) = summaries[date] ?: summarizeDay(date, emptyList(), now, null, settings)
     val target = settings.rules.requiredInside
@@ -342,6 +343,8 @@ private fun DayRow(s: DaySummary) {
             )
             if (s.lop) {
                 Text("LOP  ", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+            } else if (s.isRegularized) {
+                Text("Regularized  ", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
             Text(
                 s.inside.formatHm(),
@@ -354,9 +357,10 @@ private fun DayRow(s: DaySummary) {
                 append("${s.firstIn?.formatClock()} – ${s.lastOut?.formatClock() ?: "…"}")
                 if (!s.wfh) append(" · break ${s.breaks.formatHm()}")
                 if (flags.isNotEmpty()) append(" · ${flags.joinToString()}")
+                if (!s.regularized.isNullOrEmpty()) append(" · ${s.regularized}")
             },
             style = MaterialTheme.typography.bodySmall,
-            color = if (flags.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+            color = if (s.lop) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

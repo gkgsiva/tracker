@@ -89,6 +89,17 @@ class DayCalculatorTest {
     }
 
     @Test
+    fun regularizedDayKeepsReasonsButIsNotLop() {
+        val punches = listOf(inAt(9, 12), logoutAt(17, 45))
+        val lop = DayCalculator.summarize(day, punches, now = null)
+        assertTrue(lop.lop)
+        val s = DayCalculator.summarize(day, punches, now = null, regularized = "Manager approved")
+        assertFalse(s.lop)
+        assertTrue(s.isRegularized)
+        assertEquals(listOf(LopReason.LATE_LOGIN), s.lopReasons)
+    }
+
+    @Test
     fun logoutEndsTheDay() {
         val punches = listOf(inAt(8, 0), outAt(12, 0), inAt(12, 30), logoutAt(17, 0))
         val s = DayCalculator.summarize(day, punches, now = t(18, 0))

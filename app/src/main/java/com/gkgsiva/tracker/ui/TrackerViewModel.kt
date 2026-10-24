@@ -45,6 +45,11 @@ class TrackerViewModel(app: Application) : AndroidViewModel(app) {
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    /** Regularized LOP days and their notes ("" when there's none). */
+    val regularized: StateFlow<Map<LocalDate, String>> = dao.observeDays()
+        .map { days -> days.filter { it.regularized }.associate { LocalDate.ofEpochDay(it.epochDay) to it.note.orEmpty() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     val settings: StateFlow<Settings> = SettingsStore.flow(app)
 
     /** Runs a change, then refreshes the widget and reminders. */
@@ -79,7 +84,14 @@ class TrackerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setDayType(date: LocalDate, type: DayType) = change {
-        dao.upsertDay(DayEntity(date.toEpochDay(), type.name))
+        val existing = dao.day(date.toEpochDay())
+        dao.upsertDay(existing?.copy(type = type.name) ?: DayEntity(date.toEpochDay(), type.name))
+    }
+
+    /** Marks an LOP day as regularized with the manager, or undoes it ([note] null). */
+    fun setRegularized(date: LocalDate, currentType: DayType, note: String?) = change {
+        val existing = dao.day(date.toEpochDay()) ?: DayEntity(date.toEpochDay(), currentType.name)
+        dao.upsertDay(existing.copy(regularized = note != null, note = note?.trim()?.takeIf { it.isNotEmpty() }))
     }
 
     /** Deletes every entry and day setting. */

@@ -85,6 +85,7 @@ object Insights {
                 Forecast(true, "Heading for LOP: no login before ${rules.arriveBy.formatClock()}")
             }
             s.lop -> Forecast(true, "LOP today: " + s.lopReasons.joinToString { it.shortLabel() })
+            s.isRegularized -> Forecast(false, "Regularized: " + s.lopReasons.joinToString { it.shortLabel() })
             s.status == DayStatus.INSIDE -> Forecast(false, "On track: stay until ${s.expectedLeave?.formatClock()}")
             s.status == DayStatus.ON_BREAK ->
                 Forecast(false, "On track if you're back now: stay until ${s.expectedLeave?.formatClock()}")

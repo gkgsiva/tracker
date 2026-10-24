@@ -14,6 +14,7 @@ import java.time.LocalTime
 /**
  * CSV backup of all entries and day types:
  * `punch,2026-10-23,08:42:00,IN,` / `punch,…,BREAK,` / `punch,…,LOGOUT,` and `day,2026-10-24,,,LEAVE`.
+ * A regularized day adds `,REGULARIZED,<note>` (the note may contain commas; it runs to the end of the line).
  */
 object Backup {
     private const val HEADER = "kind,date,time,event,dayType"
@@ -32,7 +33,10 @@ object Backup {
                 }
                 add("punch,${p.date},${p.time},$event,")
             }
-            days.forEach { d -> add("day,${LocalDate.ofEpochDay(d.epochDay)},,,${d.type}") }
+            days.forEach { d ->
+                val regularized = if (d.regularized) ",REGULARIZED,${d.note.orEmpty().replace('\n', ' ')}" else ""
+                add("day,${LocalDate.ofEpochDay(d.epochDay)},,,${d.type}$regularized")
+            }
         }
         context.contentResolver.openOutputStream(uri, "wt")!!.bufferedWriter().use { w ->
             lines.forEach { w.appendLine(it) }
@@ -58,7 +62,12 @@ object Backup {
                             isIn = f[3] == "IN",
                             isLogout = f[3] == "LOGOUT",
                         )
-                        "day" -> days += DayEntity(date.toEpochDay(), requireNotNull(Tracker.parseType(f[4])).name)
+                        "day" -> days += DayEntity(
+                            epochDay = date.toEpochDay(),
+                            type = requireNotNull(Tracker.parseType(f[4])).name,
+                            regularized = f.getOrNull(5) == "REGULARIZED",
+                            note = f.drop(6).joinToString(",").takeIf { it.isNotEmpty() },
+                        )
                         else -> error("unknown row")
                     }
                 } catch (e: Exception) {

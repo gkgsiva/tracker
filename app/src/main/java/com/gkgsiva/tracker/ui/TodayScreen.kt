@@ -36,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -51,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -91,6 +93,7 @@ private fun PunchEntity.label(isFirst: Boolean): String = when (kind) {
 fun TodayScreen(
     punchesByDay: Map<LocalDate, List<PunchEntity>>,
     dayTypes: Map<LocalDate, DayType>,
+    regularized: Map<LocalDate, String>,
     settings: Settings,
     vm: TrackerViewModel,
 ) {
@@ -102,7 +105,7 @@ fun TodayScreen(
     val punches = punchesByDay[date].orEmpty().sortedBy { it.secondOfDay }
     val context = LocalContext.current
     val isFuture = date > today
-    val summary = summarizeDay(date, punches, now, dayTypes[date], settings)
+    val summary = summarizeDay(date, punches, now, dayTypes[date], settings, regularized[date])
     val type = summary.type
     val wfh = summary.wfh
     val rules = settings.rules
@@ -183,10 +186,10 @@ fun TodayScreen(
             )
         }
 
-        LopCard(summary)
+        LopCard(summary, onRegularize = { note -> vm.setRegularized(date, summary.type, note) })
 
         if (isToday) {
-            fun summaryOf(d: LocalDate) = summarizeDay(d, punchesByDay[d].orEmpty(), now, dayTypes[d], settings)
+            fun summaryOf(d: LocalDate) = summarizeDay(d, punchesByDay[d].orEmpty(), now, dayTypes[d], settings, regularized[d])
             val monthStart = today.withDayOfMonth(1)
             OutlookCard(
                 forecast = Insights.forecast(summary, now.toLocalTime()),
@@ -477,20 +480,58 @@ private fun StatusCard(s: DaySummary, live: Boolean, future: Boolean) {
     }
 }
 
+/**
+ * What made the day LOP. It can be marked regularized (agreed with the manager), with an optional
+ * note, which stops it counting as LOP; [onRegularize] gets null to undo that.
+ */
 @Composable
-private fun LopCard(s: DaySummary) {
-    if (!s.lop) return
+private fun LopCard(s: DaySummary, onRegularize: (String?) -> Unit) {
+    if (s.lopReasons.isEmpty()) return
+    var asking by remember { mutableStateOf(false) }
+    val regularized = s.isRegularized
     Card(
         Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
+        colors = if (regularized) CardDefaults.cardColors() else CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer,
         ),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("LOP day", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                if (regularized) "Regularized" else "LOP day",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (regularized) MaterialTheme.colorScheme.primary else Color.Unspecified,
+            )
             s.lopReasons.forEach { Text("• ${it.describe(s)}") }
+            if (regularized) {
+                s.regularized?.takeIf { it.isNotEmpty() }?.let { Text("Note: $it", fontStyle = FontStyle.Italic) }
+                Text("Not counted as LOP.", style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { onRegularize(null) }) { Text("Undo regularize") }
+            } else {
+                OutlinedButton(onClick = { asking = true }) { Text("Regularize") }
+            }
         }
+    }
+    if (asking) {
+        var note by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { asking = false },
+            title = { Text("Regularize this day?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Use this when your manager has approved it. The day stops counting as LOP, and the reason stays visible.")
+                    OutlinedTextField(
+                        value = note,
+                        onValueChange = { note = it.take(120) },
+                        label = { Text("Note (optional)") },
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { onRegularize(note); asking = false }) { Text("Regularize") } },
+            dismissButton = { TextButton(onClick = { asking = false }) { Text("Cancel") } },
+        )
     }
 }
 

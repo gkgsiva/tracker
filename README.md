@@ -9,7 +9,8 @@ A small Android app for tracking office hours under these rules:
 
 Breaking any one of the first three rules makes the day **LOP** (loss of pay), even with more than 8 hours
 inside: a late login, leaving before 5 PM, or less than 8 hours inside. A late login shows as LOP right away;
-the other two once the day is over.
+the other two once the day is over. If your manager regularizes an LOP, tap **Regularize** on that day
+(with an optional note): it then shows as Regularized, keeps the original reason, and isn't counted as LOP.
 
 ## How it works
 

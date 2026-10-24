@@ -15,13 +15,17 @@ object Tracker {
 
     fun parseType(name: String?): DayType? = DayType.entries.firstOrNull { it.name == name }
 
+    /** The [DaySummary.regularized] value for a stored day. */
+    fun DayEntity.regularizedNote(): String? = if (regularized) note.orEmpty() else null
+
     /** Summary of [date] from the database; live when [date] is today. */
     suspend fun summary(context: Context, date: LocalDate, now: LocalDateTime = LocalDateTime.now()): DaySummary {
         val dao = AppDatabase.get(context).punchDao()
         val settings = SettingsStore.get(context)
         val punches = dao.punchesFor(date.toEpochDay())
+        val day = dao.day(date.toEpochDay())
         val type = DayType.effective(
-            parseType(dao.day(date.toEpochDay())?.type),
+            parseType(day?.type),
             date,
             hasPunches = punches.isNotEmpty(),
             weeklyOffs = settings.weeklyOffs,
@@ -32,6 +36,7 @@ object Tracker {
             now = if (date == now.toLocalDate()) now.toLocalTime() else null,
             rules = settings.rules,
             type = type,
+            regularized = day?.regularizedNote(),
         )
     }
 
