@@ -337,9 +337,7 @@ break** and **Log out** buttons work from the lock screen without opening the ap
 | Planned break ending | A pop-up alert with an **End break** button, 2 minutes (adjustable) before the break length you picked runs out, and again when it does |
 | Month summary | On the 1st at 10:00 AM: for the month just ended, days that met 8h, LOP days, regularized days and total hours |
 
-| Planned break ending | Month summary |
-| --- | --- |
-| ![Planned break alert](screenshots/notification-break-ending.png) | ![Month summary notification](screenshots/notification-month-summary.png) |
+![Planned break alert](screenshots/notification-break-ending.png)
 
 The reminders are a few one-off alarms. The app does no other work in the background, so it doesn't
 drain the battery.
@@ -361,8 +359,6 @@ screen automatically.)*
 **Office break** tile into your tiles. One tap logs you in, starts a break or ends a break, also from
 the lock screen. It is highlighted while you're on a break, and greyed out when there is nothing to do
 (for example after logging out).
-
-![Quick settings tile](screenshots/quick-settings-tile.png)
 
 ## 13. Settings
 

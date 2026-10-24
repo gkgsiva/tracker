@@ -142,6 +142,7 @@ shot add-entry-dialog
 tap Save first 2
 scroll_to Changes && shot day-changes
 scroll_to "Edit day" && tap "Edit day" && { shot edit-day-dialog; tap Cancel; }
+to_top
 tap Today top 2         # the "Today" button beside the date
 to_top
 shot today-inside 3
@@ -157,12 +158,6 @@ shot today-on-break 2
 adb shell cmd statusbar expand-notifications
 shot notification-status 2
 adb shell cmd statusbar collapse
-adb shell cmd statusbar add-tile $PKG/.system.BreakTileService
-sleep 2
-adb shell cmd statusbar expand-settings
-shot quick-settings-tile 3
-adb shell cmd statusbar collapse
-sleep 1
 # Jump 14 minutes ahead so the 15-minute planned break's heads-up (2 minutes before) fires.
 set_clock 102114352026.00
 sleep 12
@@ -186,11 +181,11 @@ to_top
 shot history-calendar 2
 dump; if xy=$(find_node 27); then adb shell input swipe $xy $xy 900; sleep 1.5; shot calendar-long-press; adb shell input keyevent KEYCODE_BACK; sleep 1; fi
 to_top
-scroll_to Daily && shot history-daily
-tap Weekly && { scroll_to "Average per working day"; shot history-weekly; }
-tap Monthly && { scroll_to "Average per working day"; shot history-monthly; }
-tap Year && { scroll_to Year; shot history-year; }
-tap Daily
+swipe_up; shot history-daily
+tap Weekly && { swipe_up; shot history-weekly; }
+tap Monthly && { swipe_up; shot history-monthly; }
+tap Year && { swipe_up; shot history-year; }
+to_top; swipe_up; tap Daily
 scroll_to "Leave & holidays" && shot history-targets
 scroll_to "Regularized (1)" && shot history-regularized
 to_top
@@ -214,22 +209,10 @@ open_day 30 && { to_top; shot day-planned-leave; }
 tap Settings bottom
 to_top
 shot settings-rules
-scroll_to "Half day and short leave" && shot settings-part-days
+swipe_up; shot settings-part-days
 scroll_to Reminders && shot settings-reminders
 scroll_to "Clear all data" && shot settings-backup
 to_top
 tap Dark && { tap Today bottom; tap Today top; to_top; shot today-dark 3; tap Settings bottom; to_top; tap System; }
-
-# --- Month summary on the 1st ------------------------------------------------------------
-adb shell am force-stop $PKG
-adb shell am start -n $PKG/.ui.MainActivity >/dev/null; sleep 3
-tap Today bottom
-tap "Log out" first 1.5; tap "Log out" first 1.5   # confirm, so the status notification goes
-adb shell input keyevent KEYCODE_HOME
-set_clock 110109592026.30
-sleep 50
-adb shell cmd statusbar expand-notifications
-shot notification-month-summary 3
-adb shell cmd statusbar collapse
 
 ls -la "$OUT"
