@@ -19,6 +19,10 @@ enum class DayType(val label: String) {
     WFH("WFH"),
     HOLIDAY("Holiday"),
     LEAVE("On leave"),
+    /** In the office for [Rules.halfDayHours], at any time; see [Rules.forType]. */
+    HALF_DAY("Half day"),
+    /** A few hours off at the start or end; see [Rules.forType]. */
+    SHORT_LEAVE("Short leave"),
     /** Not chosen by hand: a weekly off day (e.g. Sunday) with nothing logged. */
     WEEKLY_OFF("Weekly off");
 
@@ -115,6 +119,7 @@ object DayCalculator {
         type: DayType = DayType.OFFICE,
         regularized: String? = null,
     ): DaySummary {
+        val rules = rules.forType(type)
         var inside = Duration.ZERO
         var breaks = Duration.ZERO
         var breakCount = 0
@@ -158,7 +163,7 @@ object DayCalculator {
         }
 
         // On a past day a final break start that never ended is most likely a logout entered as a break.
-        if (now == null && type == DayType.OFFICE && outSince != null && !loggedOut && lastOut != null) {
+        if (now == null && !type.isDayOff && type != DayType.WFH && outSince != null && !loggedOut && lastOut != null) {
             issues += EntryIssue(EntryIssueKind.OPEN_BREAK, lastOut)
         }
 

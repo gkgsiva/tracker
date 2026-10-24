@@ -293,4 +293,39 @@ class DayCalculatorTest {
         assertEquals(listOf(LopReason.LATE_LOGIN), s.lopReasons)
         assertFalse(DayCalculator.summarize(day, listOf(inAt(8, 59)), now = t(10, 0)).lop)
     }
+
+    @Test
+    fun halfDayNeedsOnlyItsHoursAtAnyTime() {
+        val s = DayCalculator.summarize(day, listOf(inAt(13, 0), logoutAt(17, 5)), null, type = DayType.HALF_DAY)
+        assertTrue(s.targetMet)
+        assertFalse(s.lop)
+        val short = DayCalculator.summarize(day, listOf(inAt(9, 30), logoutAt(13, 0)), null, type = DayType.HALF_DAY)
+        assertEquals(listOf(LopReason.UNDER_8H), short.lopReasons)
+        assertEquals(Duration.ofHours(4), short.rules.requiredInside)
+    }
+
+    @Test
+    fun shortLeaveEasesCoreHoursAndHours() {
+        // 2h short leave: 6h inside, log in by 11:00, leave after 15:00.
+        val late = DayCalculator.summarize(day, listOf(inAt(10, 45), logoutAt(17, 0)), null, type = DayType.SHORT_LEAVE)
+        assertFalse(late.lop)
+        val early = DayCalculator.summarize(day, listOf(inAt(8, 30), logoutAt(15, 0)), null, type = DayType.SHORT_LEAVE)
+        assertFalse(early.lop)
+        val tooLate = DayCalculator.summarize(day, listOf(inAt(11, 5), logoutAt(18, 0)), null, type = DayType.SHORT_LEAVE)
+        assertEquals(listOf(LopReason.LATE_LOGIN), tooLate.lopReasons)
+        assertEquals(Duration.ofHours(1), early.breakAllowance)
+    }
+
+    @Test
+    fun breakPlanAppliesOnlyToTheBreakInProgress() {
+        val onBreak = DayCalculator.summarize(day, listOf(inAt(8, 30), outAt(13, 0)), now = t(13, 10))
+        val plan = BreakPlan(day, t(13, 0), Duration.ofMinutes(15))
+        assertTrue(plan.appliesTo(onBreak))
+        assertEquals(t(13, 15), plan.end)
+        assertEquals(Duration.ofMinutes(5), plan.left(t(13, 10)))
+        val back = DayCalculator.summarize(day, listOf(inAt(8, 30), outAt(13, 0), inAt(13, 12)), now = t(13, 20))
+        assertFalse(plan.appliesTo(back))
+        val nextBreak = DayCalculator.summarize(day, listOf(inAt(8, 30), outAt(13, 0), inAt(13, 12), outAt(15, 0)), now = t(15, 5))
+        assertFalse(plan.appliesTo(nextBreak))
+    }
 }

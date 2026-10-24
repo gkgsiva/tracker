@@ -40,11 +40,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.BuildConfig
+import com.gkgsiva.tracker.domain.DayType
 import com.gkgsiva.tracker.domain.Rules
 import com.gkgsiva.tracker.domain.Settings
 import com.gkgsiva.tracker.domain.ThemeMode
 import com.gkgsiva.tracker.system.Backup
-import com.gkgsiva.tracker.system.GateMonitor
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.Instant
@@ -73,25 +73,6 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
     }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) vm.export(uri, ::toast)
-    }
-    // Bumped after a permission answer so the gate status below re-reads it.
-    var permissionCheck by remember { mutableStateOf(0) }
-    var gateRadius by remember { mutableStateOf(settings.gate?.radiusMeters ?: DEFAULT_GATE_RADIUS) }
-    fun setRadius(meters: Int) {
-        gateRadius = meters
-        settings.gate?.let { update(settings.copy(gate = it.copy(radiusMeters = meters))) }
-    }
-    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        permissionCheck++
-        if (result[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
-            vm.setGateHere(gateRadius, ::toast)
-        } else {
-            toast("Precise location is needed to find the gate.")
-        }
-    }
-    val backgroundPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        permissionCheck++
-        vm.refreshGate()
     }
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
@@ -127,6 +108,29 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
                     "${rules.breakAllowance(null).formatShort()}, earlier gives more. A longer break isn't LOP; you just stay later."
             )
             TimeSetting.entries.drop(2).forEach { SettingRow(it.label, it.get(rules).formatClock(), onClick = { editingTime = it }) }
+        }
+
+        Section("Half day and short leave") {
+            Stepper(
+                "Half day hours",
+                rules.halfDayHours,
+                step = Duration.ofMinutes(30),
+                min = Duration.ofHours(1),
+                max = rules.requiredInside,
+            ) { update(settings.copy(rules = rules.copy(halfDayHours = it))) }
+            Hint("A half day needs this much inside, at any time of day.")
+            Stepper(
+                "Short leave",
+                rules.shortLeave,
+                step = Duration.ofMinutes(30),
+                min = Duration.ofMinutes(30),
+                max = Duration.ofHours(4),
+            ) { update(settings.copy(rules = rules.copy(shortLeave = it))) }
+            val short = rules.forType(DayType.SHORT_LEAVE)
+            Hint(
+                "On a short-leave day you need ${short.requiredInside.formatShort()} inside, and can log in by " +
+                    "${short.arriveBy.formatClock()} or leave after ${short.leaveAfter.formatClock()}."
+            )
         }
 
         Section("Appearance") {
@@ -183,6 +187,14 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
                 "5 minutes before your break allowance runs out, and when it does",
                 settings.remindBreak,
             ) { setReminder(settings.copy(remindBreak = it)) }
+            Stepper(
+                "Planned break alert",
+                Duration.ofMinutes(settings.breakPlanLeadMinutes.toLong()),
+                step = Duration.ofMinutes(1),
+                min = Duration.ofMinutes(1),
+                max = Duration.ofMinutes(10),
+            ) { setReminder(settings.copy(breakPlanLeadMinutes = it.toMinutes().toInt())) }
+            Hint("When you start a break you pick how long it will be. You're alerted this long before it ends, and again when it does.")
             SwitchRow(
                 "Month summary",
                 "On the 1st: days that met ${rules.requiredInside.formatShort()}, LOP, regularized and total hours for the month just ended",
@@ -193,50 +205,6 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
                 "While logged in: countdown to ${rules.requiredInside.formatShort()}, break used, and break / log out buttons on the lock screen",
                 settings.statusNotification,
             ) { setReminder(settings.copy(statusNotification = it)) }
-        }
-
-        Section("Gate auto-login") {
-            val gate = settings.gate
-            val background = permissionCheck >= 0 && GateMonitor.hasBackground(context)
-            Hint(
-                "Stand at the office gate and save it. When you walk in or out, a notification offers the " +
-                    "login, break or logout at the time you crossed. Nothing is recorded until you tap it."
-            )
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Radius", Modifier.weight(1f))
-                TextButton(onClick = { setRadius(gateRadius - 25) }, enabled = gateRadius > 50) { Text("−") }
-                Text("$gateRadius m", Modifier.width(64.dp), textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold)
-                TextButton(onClick = { setRadius(gateRadius + 25) }, enabled = gateRadius < 300) { Text("+") }
-            }
-            OutlinedButton(
-                onClick = {
-                    if (GateMonitor.hasForeground(context)) {
-                        vm.setGateHere(gateRadius, ::toast)
-                    } else {
-                        locationPermission.launch(
-                            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (gate == null) "Set gate to my current location" else "Move gate to my current location") }
-            if (gate != null) {
-                if (!background && Build.VERSION.SDK_INT >= 29) {
-                    Hint("Choose \"Allow all the time\" for location so the gate works while the app is closed.")
-                    OutlinedButton(
-                        onClick = { backgroundPermission.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Allow background location") }
-                } else {
-                    Hint("On: watching a ${gate.radiusMeters} m circle around the gate.")
-                }
-                OutlinedButton(
-                    onClick = { update(settings.copy(gate = null)) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Remove gate") }
-            } else {
-                Hint("Off until you set a gate.")
-            }
         }
 
         Section("Backup") {
@@ -327,8 +295,6 @@ private enum class TimeSetting(val label: String, val get: (Rules) -> LocalTime,
     OFFICE_START("Official start", { it.officeStart }, { r, t -> r.copy(officeStart = t) }),
     OFFICE_END("Official end", { it.officeEnd }, { r, t -> r.copy(officeEnd = t) }),
 }
-
-private const val DEFAULT_GATE_RADIUS = 100
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {

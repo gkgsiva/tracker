@@ -80,8 +80,11 @@ object StatusNotification {
             builder.setContentTitle("On break · ${s.remaining.formatHm()} still to go")
                 .setWhen(now - s.breaks.toMillis())
                 .setContentText(
-                    s.returnBy?.let { "Back by ${it.formatClock()} to leave by ${rules.officeEnd.formatClock()}" }
-                        ?: "$breakText · over the allowance"
+                    listOfNotNull(
+                        BreakPlans.current(context, s)?.let { "${it.length.formatShort()} break, back at ${it.end.formatClock()}" },
+                        s.returnBy?.let { "Back by ${it.formatClock()} to leave by ${rules.officeEnd.formatClock()}" }
+                            ?: "$breakText · over the allowance",
+                    ).joinToString(" · ")
                 )
                 .addAction(0, "End break", TrackerWidget.punchIntent(context, Action.BREAK_END))
         }

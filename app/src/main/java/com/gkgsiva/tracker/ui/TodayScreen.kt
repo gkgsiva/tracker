@@ -63,12 +63,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.data.PunchEntity
+import com.gkgsiva.tracker.domain.BreakPlan
 import com.gkgsiva.tracker.domain.DayStatus
 import com.gkgsiva.tracker.domain.DaySummary
 import com.gkgsiva.tracker.domain.DayType
 import com.gkgsiva.tracker.domain.EntryIssue
 import com.gkgsiva.tracker.domain.EntryIssueKind
+import com.gkgsiva.tracker.domain.Rules
 import com.gkgsiva.tracker.domain.Settings
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -132,6 +135,9 @@ fun TodayScreen(
     var adding by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<PunchEntity?>(null) }
     var confirmLogout by remember { mutableStateOf<(() -> Unit)?>(null) }
+    // Choosing a length for a new break (null plan) or changing the current one.
+    var planningBreak by remember { mutableStateOf(false) }
+    val breakPlan = if (isToday) vm.breakPlan(summary) else null
 
     /** Logs out, asking first when doing it now would make the day LOP. */
     fun logout(action: () -> Unit) {
@@ -199,11 +205,16 @@ fun TodayScreen(
                 status = summary.status,
                 wfh = wfh,
                 onLogin = { vm.punchNow(isIn = true) },
-                onBreakStart = { vm.punchNow(isIn = false) },
+                onBreakStart = { planningBreak = true },
                 onBreakEnd = { vm.punchNow(isIn = true) },
                 onLogout = { logout { vm.punchNow(isIn = false, isLogout = true) } },
                 onLeftDuringBreak = { punches.lastOrNull()?.let { last -> logout { vm.convertToLogout(last) } } },
             )
+        }
+
+        if (breakPlan != null) BreakPlanCard(breakPlan, now.toLocalTime(), onChange = { planningBreak = true })
+        else if (isToday && summary.status == DayStatus.ON_BREAK) {
+            TextButton(onClick = { planningBreak = true }, modifier = Modifier.fillMaxWidth()) { Text("Set a length for this break") }
         }
 
         if (!summary.dayOff && !isFuture) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -217,7 +228,7 @@ fun TodayScreen(
                     else "${summary.breakLeft.formatHm()} of ${summary.breakAllowance.formatShort()} left",
                 )
             }
-            StatTile("To go", summary.remaining.formatHm(), Modifier.weight(1f), sub = "of ${rules.requiredInside.formatShort()}")
+            StatTile("To go", summary.remaining.formatHm(), Modifier.weight(1f), sub = "of ${summary.rules.requiredInside.formatShort()}")
         }
 
         LopCard(summary, onRegularize = { note -> vm.setRegularized(date, summary.type, note) })
@@ -234,7 +245,7 @@ fun TodayScreen(
             )
         }
 
-        DayTypeRow(type, onPick = { vm.setDayType(date, it) })
+        DayTypeRow(type, rules, onPick = { vm.setDayType(date, it) })
 
         if (!summary.dayOff && !isFuture) DetailsCard(summary)
 
@@ -265,6 +276,26 @@ fun TodayScreen(
         }
     }
 
+    if (planningBreak) {
+        val onBreak = summary.status == DayStatus.ON_BREAK
+        BreakPlanDialog(
+            title = if (onBreak) "Length of this break" else "Start a break",
+            initial = breakPlan?.length?.toMinutes()?.toInt() ?: settings.breakPlanMinutes,
+            confirm = if (onBreak) "Save" else "Start break",
+            onDismiss = { planningBreak = false },
+            onPick = { minutes ->
+                planningBreak = false
+                when {
+                    !onBreak -> vm.startBreak(minutes)
+                    breakPlan != null -> vm.replanBreak(breakPlan, minutes)
+                    // A break started without a plan: plan it from when it began.
+                    minutes != null && summary.lastOut != null -> vm.replanBreak(
+                        BreakPlan(date, summary.lastOut, Duration.ofMinutes(minutes.toLong())), minutes,
+                    )
+                }
+            },
+        )
+    }
     if (adding) {
         val last = punches.lastOrNull()
         PunchDialog(
@@ -414,7 +445,7 @@ private fun IssuesCard(issues: List<EntryIssue>, onFix: (EntryIssue) -> Unit) {
 
 /** The day's type as one compact row; tapping it opens the choices with what each means. */
 @Composable
-private fun DayTypeRow(type: DayType, onPick: (DayType) -> Unit) {
+private fun DayTypeRow(type: DayType, rules: Rules, onPick: (DayType) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Box {
@@ -425,7 +456,7 @@ private fun DayTypeRow(type: DayType, onPick: (DayType) -> Unit) {
                 Column(Modifier.weight(1f)) {
                     Text("Day type", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(type.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(type.meaning(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(type.meaning(rules), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text("Change", color = MaterialTheme.colorScheme.primary)
                 Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -436,7 +467,7 @@ private fun DayTypeRow(type: DayType, onPick: (DayType) -> Unit) {
                         text = {
                             Column {
                                 Text(t.label, fontWeight = if (t == type) FontWeight.Bold else FontWeight.Normal)
-                                Text(t.meaning(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(t.meaning(rules), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         },
                         onClick = { open = false; if (t != type) onPick(t) },
@@ -447,11 +478,75 @@ private fun DayTypeRow(type: DayType, onPick: (DayType) -> Unit) {
     }
 }
 
-private fun DayType.meaning(): String = when (this) {
+private fun DayType.meaning(rules: Rules): String = when (this) {
     DayType.OFFICE -> "Login, breaks and logout are tracked"
     DayType.WFH -> "Only first login and last logout count"
     DayType.HOLIDAY, DayType.LEAVE -> "No login needed, never LOP"
+    DayType.HALF_DAY -> "${rules.halfDayHours.formatShort()} inside at any time, no core hours"
+    DayType.SHORT_LEAVE -> rules.forType(this).let {
+        "${it.requiredInside.formatShort()} inside, log in by ${it.arriveBy.formatClock()}, leave after ${it.leaveAfter.formatClock()}"
+    }
     DayType.WEEKLY_OFF -> "Weekly off · choose Office if you're working"
+}
+
+/** The break in progress against its planned length. */
+@Composable
+private fun BreakPlanCard(plan: BreakPlan, now: LocalTime, onChange: () -> Unit) {
+    val left = plan.left(now)
+    val over = left.isNegative
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (over) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.tertiaryContainer,
+        ),
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (over) "${left.negated().formatHm()} over your ${plan.length.formatShort()} break"
+                    else "${left.formatHm()} left of your ${plan.length.formatShort()} break",
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text("Planned back at ${plan.end.formatClock()}", style = MaterialTheme.typography.bodySmall)
+            }
+            TextButton(onClick = onChange) { Text("Change") }
+        }
+    }
+}
+
+/** Picks how long a break should last; you get a heads-up before it ends. */
+@Composable
+private fun BreakPlanDialog(title: String, initial: Int?, confirm: String, onDismiss: () -> Unit, onPick: (Int?) -> Unit) {
+    var minutes by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                (BreakPlan.CHOICES.map<Int, Int?> { it } + null).chunked(3).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { m ->
+                            FilterChip(
+                                selected = minutes == m,
+                                onClick = { minutes = m },
+                                modifier = Modifier.weight(1f),
+                                label = { Text(m?.let { Duration.ofMinutes(it.toLong()).formatShort() } ?: "No limit", Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
+                            )
+                        }
+                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+                Text(
+                    if (minutes == null) "No alert; the break allowance reminder still applies."
+                    else "You'll get an alert shortly before it ends, and when it does.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onPick(minutes) }) { Text(confirm) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

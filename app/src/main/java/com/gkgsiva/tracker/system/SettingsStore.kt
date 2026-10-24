@@ -1,7 +1,6 @@
 package com.gkgsiva.tracker.system
 
 import android.content.Context
-import com.gkgsiva.tracker.domain.Gate
 import com.gkgsiva.tracker.domain.Rules
 import com.gkgsiva.tracker.domain.Settings
 import com.gkgsiva.tracker.domain.ThemeMode
@@ -30,6 +29,8 @@ object SettingsStore {
             .putLong("requiredMinutes", r.requiredInside.toMinutes())
             .putInt("officeStart", r.officeStart.toSecondOfDay() / 60)
             .putInt("officeEnd", r.officeEnd.toSecondOfDay() / 60)
+            .putLong("halfDayMinutes", r.halfDayHours.toMinutes())
+            .putLong("shortLeaveMinutes", r.shortLeave.toMinutes())
             .putStringSet("weeklyOffs", settings.weeklyOffs.map { it.name }.toSet())
             .putBoolean("remindLogin", settings.remindLogin)
             .putBoolean("remindLeave", settings.remindLeave)
@@ -38,16 +39,10 @@ object SettingsStore {
             .putString("theme", settings.theme.name)
             .putString("backupFolder", settings.backupFolder)
             .putBoolean("monthSummary", settings.monthSummary)
-            .apply {
-                val gate = settings.gate
-                if (gate == null) {
-                    remove("gateLat"); remove("gateLng"); remove("gateRadius")
-                } else {
-                    putLong("gateLat", gate.latitude.toRawBits())
-                    putLong("gateLng", gate.longitude.toRawBits())
-                    putInt("gateRadius", gate.radiusMeters)
-                }
-            }
+            .putInt("breakPlan", settings.breakPlanMinutes ?: 0)
+            .putInt("breakPlanLead", settings.breakPlanLeadMinutes)
+            // Left over from the gate auto-login removed in 1.8.
+            .remove("gateLat").remove("gateLng").remove("gateRadius")
             .apply()
         (flow(context) as MutableStateFlow).value = settings
     }
@@ -62,6 +57,8 @@ object SettingsStore {
                 requiredInside = Duration.ofMinutes(p.getLong("requiredMinutes", d.rules.requiredInside.toMinutes())),
                 officeStart = LocalTime.ofSecondOfDay(p.getInt("officeStart", d.rules.officeStart.toSecondOfDay() / 60) * 60L),
                 officeEnd = LocalTime.ofSecondOfDay(p.getInt("officeEnd", d.rules.officeEnd.toSecondOfDay() / 60) * 60L),
+                halfDayHours = Duration.ofMinutes(p.getLong("halfDayMinutes", d.rules.halfDayHours.toMinutes())),
+                shortLeave = Duration.ofMinutes(p.getLong("shortLeaveMinutes", d.rules.shortLeave.toMinutes())),
             ),
             weeklyOffs = p.getStringSet("weeklyOffs", null)
                 ?.mapNotNull { name -> DayOfWeek.entries.firstOrNull { it.name == name } }
@@ -74,13 +71,8 @@ object SettingsStore {
             theme = ThemeMode.entries.firstOrNull { it.name == p.getString("theme", null) } ?: d.theme,
             backupFolder = p.getString("backupFolder", null),
             monthSummary = p.getBoolean("monthSummary", d.monthSummary),
-            gate = if (p.contains("gateLat") && p.contains("gateLng")) {
-                Gate(
-                    Double.fromBits(p.getLong("gateLat", 0)),
-                    Double.fromBits(p.getLong("gateLng", 0)),
-                    p.getInt("gateRadius", 100),
-                )
-            } else null,
+            breakPlanMinutes = p.getInt("breakPlan", d.breakPlanMinutes ?: 0).takeIf { it > 0 },
+            breakPlanLeadMinutes = p.getInt("breakPlanLead", d.breakPlanLeadMinutes),
         )
     }
 }
