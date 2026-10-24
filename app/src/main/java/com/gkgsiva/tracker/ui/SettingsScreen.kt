@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.gkgsiva.tracker.BuildConfig
 import com.gkgsiva.tracker.domain.Settings
 import java.time.DayOfWeek
 import java.time.Duration
@@ -157,6 +158,7 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
             ) { Text("Clear all data") }
         }
 
+        Hint("Office Tracker version ${BuildConfig.VERSION_NAME}")
         Hint(
             "Tips: long-press your home screen → Widgets → Office Tracker for one-tap login and breaks. " +
                 "Edit your quick settings panel to add the Office Tracker tile for breaks from the lock screen."

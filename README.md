@@ -55,6 +55,12 @@ Every push builds a debug APK in GitHub Actions. Open the latest **Android build
 `office-tracker-debug-apk` artifact, unzip it and install `app-debug.apk` on your phone
 (you'll need to allow installs from unknown sources).
 
+## Versions
+
+Each set of additions bumps the minor version (`versionName` in `app/build.gradle.kts`): 1.0, 1.1, 1.2, …
+When it merges into `main`, the *Tag release* workflow tags the commit `v<version>`, so any earlier version
+can be checked out and rebuilt. The installed version is shown at the bottom of Settings.
+
 ## Building locally
 
 Open the project in Android Studio, or with the Android SDK installed run:
