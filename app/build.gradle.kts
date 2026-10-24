@@ -13,9 +13,21 @@ android {
         applicationId = "com.gkgsiva.tracker"
         minSdk = 26
         targetSdk = 35
-        // Bump the minor version for each set of additions; merging to main tags it v<versionName>.
-        versionCode = 2
-        versionName = "1.1"
+        // Bump the minor version for each set of additions; merging to main tags it v<versionName>
+        // and publishes a release with the APK.
+        versionCode = 3
+        versionName = "1.2"
+    }
+
+    signingConfigs {
+        // A fixed debug key kept in the repo, so every build (CI, releases, local) has the same
+        // signature and a new APK installs over the old one without losing data.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {

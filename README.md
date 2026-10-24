@@ -58,15 +58,19 @@ Default rules live in `app/src/main/java/com/gkgsiva/tracker/domain/Rules.kt`.
 
 ## Getting the APK
 
-Every push builds a debug APK in GitHub Actions. Open the latest **Android build** run, download the
-`office-tracker-debug-apk` artifact, unzip it and install `app-debug.apk` on your phone
-(you'll need to allow installs from unknown sources).
+Each version is on the [Releases](https://github.com/gkgsiva/tracker/releases) page: open it on your phone and
+tap `office-tracker-<version>.apk` to download and install it (allow installs from unknown sources once).
+From 1.2 on every build is signed with the same key (`app/debug.keystore`), so a new APK installs over the
+old one and keeps your data.
+
+Every push also builds a test APK in GitHub Actions: open the **Android build** run and download the
+`office-tracker-debug-apk` artifact (a zip with `app-debug.apk` inside).
 
 ## Versions
 
 Each set of additions bumps the minor version (`versionName` in `app/build.gradle.kts`): 1.0, 1.1, 1.2, …
-When it merges into `main`, the *Tag release* workflow tags the commit `v<version>`, so any earlier version
-can be checked out and rebuilt. The installed version is shown at the bottom of Settings.
+When it merges into `main`, the *Release* workflow tags the commit `v<version>` and publishes a release
+with the APK, so any earlier version can be installed again or checked out and rebuilt. The installed version is shown at the bottom of Settings.
 
 ## Building locally
 
