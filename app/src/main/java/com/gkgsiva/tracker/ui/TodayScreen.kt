@@ -53,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.data.PunchEntity
 import com.gkgsiva.tracker.domain.BreakPlan
+import com.gkgsiva.tracker.domain.DayShape
 import com.gkgsiva.tracker.domain.DayStatus
 import com.gkgsiva.tracker.domain.DaySummary
 import com.gkgsiva.tracker.domain.DayType
@@ -137,6 +139,8 @@ fun TodayScreen(
     var confirmLogout by remember { mutableStateOf<(() -> Unit)?>(null) }
     // Choosing a length for a new break (null plan) or changing the current one.
     var planningBreak by remember { mutableStateOf(false) }
+    var editingDay by remember { mutableStateOf(false) }
+    val edits by vm.edits.collectAsStateWithLifecycle()
     val breakPlan = if (isToday) vm.breakPlan(summary) else null
 
     /** Logs out, asking first when doing it now would make the day LOP. */
@@ -255,6 +259,7 @@ fun TodayScreen(
             Column(Modifier.padding(vertical = 8.dp)) {
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Entries", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    if (punches.isNotEmpty()) TextButton(onClick = { editingDay = true }) { Text("Edit day") }
                     TextButton(onClick = { adding = true }) {
                         Icon(Icons.Filled.Add, contentDescription = null)
                         Spacer(Modifier.width(4.dp))
@@ -274,8 +279,19 @@ fun TodayScreen(
                 }
             }
         }
+
+        ChangesCard(edits[date].orEmpty())
     }
 
+    if (editingDay) {
+        DayEditorDialog(
+            initial = DayShape.of(punches.map { it.toPunch() }),
+            defaultLogin = rules.officeStart,
+            defaultLogout = rules.officeEnd,
+            onDismiss = { editingDay = false },
+            onSave = { shape, reason -> vm.saveDay(date, shape, reason); editingDay = false },
+        )
+    }
     if (planningBreak) {
         val onBreak = summary.status == DayStatus.ON_BREAK
         BreakPlanDialog(

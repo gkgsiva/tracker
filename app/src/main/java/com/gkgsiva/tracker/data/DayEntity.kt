@@ -14,4 +14,6 @@ data class DayEntity(
     @ColumnInfo(defaultValue = "0") val regularized: Boolean = false,
     /** Optional note on what was agreed. */
     val note: String? = null,
+    /** The day it was regularized, as an epoch day. */
+    val regularizedOn: Long? = null,
 )

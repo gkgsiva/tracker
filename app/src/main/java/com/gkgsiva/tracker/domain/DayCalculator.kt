@@ -29,6 +29,9 @@ enum class DayType(val label: String) {
     /** No login needed and never LOP. */
     val isDayOff: Boolean get() = this == HOLIDAY || this == LEAVE || this == WEEKLY_OFF
 
+    /** A working day with fewer hours; see [Rules.forType]. */
+    val isPartDay: Boolean get() = this == HALF_DAY || this == SHORT_LEAVE
+
     /** Types the user picks for a day. */
     val choosable: Boolean get() = this != WEEKLY_OFF
 

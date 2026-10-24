@@ -39,6 +39,12 @@ ahead. History lists what's planned and how much leave you've taken this year.
 holiday or leave), and tapping a day opens it. Entries that don't fit together (a check-out before the
 first login, two logins in a row, a past day that ends on a break) are flagged on the day with a fix, and
 if a recent day has no logout, Today (and the morning login reminder) asks for the time you left.
+Long-press a day on the calendar to set its type (plan leave, holidays, half days or short leave ahead).
+
+**Edit day** on any day opens login, every break and logout in one form, with an optional reason. Every
+change made by hand (there or entry by entry) is written to the day's **Changes** list, e.g. "login 9:05 AM
+→ 8:55 AM · forgot to swipe". History lists every **regularized** day with its reason, note and the date it
+was regularized, and can share that list.
 
 **Settings** lets you change the rules (core login-by and leave-after, hours inside, official start and end), choose light, dark or system theme, pick weekly
 off days (Saturday and Sunday by default), turn reminders on or off (login reminder 15 minutes before the

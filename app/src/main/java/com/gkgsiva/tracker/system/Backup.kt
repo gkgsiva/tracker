@@ -6,6 +6,7 @@ import android.provider.DocumentsContract
 import androidx.room.withTransaction
 import com.gkgsiva.tracker.data.AppDatabase
 import com.gkgsiva.tracker.data.DayEntity
+import com.gkgsiva.tracker.data.EditEntity
 import com.gkgsiva.tracker.data.PunchEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -13,13 +14,18 @@ import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 
 /**
  * CSV backup of all entries and day types:
  * `punch,2026-10-23,08:42:00,IN,` / `punch,…,BREAK,` / `punch,…,LOGOUT,` and `day,2026-10-24,,,LEAVE`.
- * A regularized day adds `,REGULARIZED,<note>` (the note may contain commas; it runs to the end of the line).
+ * A regularized day adds `,REGULARIZED,<note>` (the note may contain commas; it runs to the end of the line)
+ * and puts the date it was regularized in the time column. Hand edits are
+ * `edit,<date>,<when, ISO>,<reason without commas>,<change to the end of the line>`.
  */
 object Backup {
     private const val HEADER = "kind,date,time,event,dayType"
@@ -82,6 +88,7 @@ object Backup {
         val dao = AppDatabase.get(context).punchDao()
         val punches = dao.allPunches()
         val days = dao.allDays()
+        val edits = dao.allEdits()
         out.bufferedWriter().apply {
             appendLine(HEADER)
             punches.forEach { p ->
@@ -94,16 +101,23 @@ object Backup {
             }
             days.forEach { d ->
                 val regularized = if (d.regularized) ",REGULARIZED,${d.note.orEmpty().replace('\n', ' ')}" else ""
-                appendLine("day,${LocalDate.ofEpochDay(d.epochDay)},,,${d.type}$regularized")
+                val on = d.regularizedOn?.let { LocalDate.ofEpochDay(it).toString() }.orEmpty()
+                appendLine("day,${LocalDate.ofEpochDay(d.epochDay)},$on,,${d.type}$regularized")
+            }
+            edits.forEach { e ->
+                val at = LocalDateTime.ofInstant(Instant.ofEpochMilli(e.atMillis), ZoneId.systemDefault()).withNano(0)
+                val reason = e.reason.orEmpty().replace(',', ';').replace('\n', ' ')
+                appendLine("edit,${e.date},$at,$reason,${e.change.replace('\n', ' ')}")
             }
             flush()
         }
-        return punches.size + days.size
+        return punches.size + days.size + edits.size
     }
 
     private suspend fun restore(context: Context, input: InputStream): Int {
         val punches = mutableListOf<PunchEntity>()
         val days = mutableListOf<DayEntity>()
+        val edits = mutableListOf<EditEntity>()
         input.bufferedReader().useLines { lines ->
             lines.forEachIndexed { i, raw ->
                 val line = raw.trim()
@@ -123,6 +137,13 @@ object Backup {
                             type = requireNotNull(Tracker.parseType(f[4])).name,
                             regularized = f.getOrNull(5) == "REGULARIZED",
                             note = f.drop(6).joinToString(",").takeIf { it.isNotEmpty() },
+                            regularizedOn = f.getOrNull(2)?.takeIf { it.isNotEmpty() }?.let { LocalDate.parse(it).toEpochDay() },
+                        )
+                        "edit" -> edits += EditEntity(
+                            epochDay = date.toEpochDay(),
+                            atMillis = LocalDateTime.parse(f[2]).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+                            reason = f[3].takeIf { it.isNotEmpty() },
+                            change = f.drop(4).joinToString(","),
                         )
                         else -> error("unknown row")
                     }
@@ -136,10 +157,12 @@ object Backup {
             val dao = db.punchDao()
             dao.deleteAllPunches()
             dao.deleteAllDays()
+            dao.deleteAllEdits()
             dao.insertAll(punches)
             dao.insertDays(days)
+            dao.insertEdits(edits)
         }
         Tracker.onChanged(context)
-        return punches.size + days.size
+        return punches.size + days.size + edits.size
     }
 }
