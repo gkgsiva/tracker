@@ -15,8 +15,8 @@ android {
         targetSdk = 35
         // Bump the minor version for each set of additions; merging to main tags it v<versionName>
         // and publishes a release with the APK.
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
     }
 
     signingConfigs {

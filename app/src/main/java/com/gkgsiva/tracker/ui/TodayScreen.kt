@@ -507,7 +507,7 @@ private fun OutlookCard(forecast: Forecast?, month: Outlook) {
                 )
             }
             DetailLine("LOP days this month", "${month.lopDays}", warn = month.lopDays > 0)
-            DetailLine("This month", "${month.done.formatHm()} of ${month.target.formatShort()}")
+            DetailLine("This month", listOfNotNull("${month.done.formatHm()} clocked", month.metText()).joinToString(" · "))
             Text(month.paceText(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
