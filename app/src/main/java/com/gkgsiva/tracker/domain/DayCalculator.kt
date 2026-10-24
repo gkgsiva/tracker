@@ -60,6 +60,8 @@ data class DaySummary(
     val returnBy: LocalTime?,
     val rules: Rules,
     val type: DayType = DayType.OFFICE,
+    /** Set when the manager regularized this day's LOP: the note, or "" without one. */
+    val regularized: String? = null,
 ) {
     val wfh: Boolean get() = type == DayType.WFH
     val dayOff: Boolean get() = type.isDayOff
@@ -81,7 +83,9 @@ data class DaySummary(
             if (status == DayStatus.MISSING_CHECKOUT) add(LopReason.MISSING_CHECKOUT)
             else if (finished && !targetMet) add(LopReason.UNDER_8H)
         }
-    val lop: Boolean get() = lopReasons.isNotEmpty()
+    /** LOP unless it was regularized; [lopReasons] still says what happened. */
+    val lop: Boolean get() = lopReasons.isNotEmpty() && regularized == null
+    val isRegularized: Boolean get() = lopReasons.isNotEmpty() && regularized != null
 }
 
 object DayCalculator {
@@ -103,6 +107,7 @@ object DayCalculator {
         now: LocalTime?,
         rules: Rules = Rules(),
         type: DayType = DayType.OFFICE,
+        regularized: String? = null,
     ): DaySummary {
         var inside = Duration.ZERO
         var breaks = Duration.ZERO
@@ -180,6 +185,7 @@ object DayCalculator {
             returnBy = returnBy,
             rules = rules,
             type = type,
+            regularized = regularized,
         )
     }
 

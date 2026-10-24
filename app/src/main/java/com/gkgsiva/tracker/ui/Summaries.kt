@@ -14,6 +14,7 @@ fun summarizeDay(
     now: LocalDateTime,
     explicitType: DayType?,
     settings: Settings,
+    regularized: String? = null,
 ): DaySummary =
     DayCalculator.summarize(
         date = date,
@@ -21,6 +22,7 @@ fun summarizeDay(
         now = if (date == now.toLocalDate()) now.toLocalTime() else null,
         rules = settings.rules,
         type = DayType.effective(explicitType, date, punches.isNotEmpty(), settings.weeklyOffs),
+        regularized = regularized,
     )
 
 /** Summaries for every day that has entries or a chosen type. */
@@ -29,7 +31,8 @@ fun summarizeAll(
     dayTypes: Map<LocalDate, DayType>,
     now: LocalDateTime,
     settings: Settings,
+    regularized: Map<LocalDate, String> = emptyMap(),
 ): Map<LocalDate, DaySummary> =
     (punchesByDay.keys + dayTypes.keys).associateWith { date ->
-        summarizeDay(date, punchesByDay[date].orEmpty(), now, dayTypes[date], settings)
+        summarizeDay(date, punchesByDay[date].orEmpty(), now, dayTypes[date], settings, regularized[date])
     }

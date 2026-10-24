@@ -66,6 +66,8 @@ object Reports {
 
     private fun status(s: DaySummary): String = when {
         s.lop -> "LOP (${s.lopReasons.joinToString { it.shortLabel() }})"
+        s.isRegularized -> "Regularized (${s.lopReasons.joinToString { it.shortLabel() }}" +
+            (s.regularized?.takeIf { it.isNotEmpty() }?.let { ": $it" } ?: "") + ")"
         s.finished -> "OK"
         else -> "in progress"
     }

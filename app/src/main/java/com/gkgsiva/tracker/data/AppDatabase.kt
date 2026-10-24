@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [PunchEntity::class, DayEntity::class], version = 4)
+@Database(entities = [PunchEntity::class, DayEntity::class], version = 5)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun punchDao(): PunchDao
 
@@ -39,11 +39,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Lets an LOP day be marked regularized, with an optional note. */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE days ADD COLUMN regularized INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE days ADD COLUMN note TEXT")
+            }
+        }
+
         @Volatile private var instance: AppDatabase? = null
 
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "tracker.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
                 .also { instance = it }
         }
