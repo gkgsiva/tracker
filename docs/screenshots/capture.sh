@@ -11,12 +11,20 @@ DEBUG=${DEBUG:-screenshot-debug}
 PKG=com.gkgsiva.tracker
 HERE=$(dirname "$0")
 mkdir -p "$OUT" "$DEBUG"
+rm -f "$OUT"/*.png
 
 log() { echo "== $*"; }
 
 dump() {
-    adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
-    adb shell cat /sdcard/ui.xml > "$DEBUG/ui.xml"
+    # On a slow emulator System UI sometimes stops responding; tap Wait on that dialog and retry.
+    for _ in 1 2 3 4 5; do
+        adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+        adb shell cat /sdcard/ui.xml > "$DEBUG/ui.xml"
+        grep -q "responding" "$DEBUG/ui.xml" || return 0
+        echo "WARN: dismissing a not-responding dialog"
+        if xy=$(find_node Wait); then adb shell input tap $xy; else adb shell input keyevent KEYCODE_BACK; fi
+        sleep 3
+    done
 }
 
 # Prints "x y" for the node whose text or content-desc is $1 (exact). $2 picks which match:
@@ -78,11 +86,13 @@ scroll_to() {
 
 shot() {
     sleep "${2:-1.5}"
+    dump
     adb exec-out screencap -p > "$OUT/$1.png"
     log "shot $1"
 }
 
-set_clock() { adb shell "date $1" >/dev/null; } # MMDDhhmmYYYY.ss
+# MMDDhhmmYYYY.ss in the phone's own time zone.
+set_clock() { adb shell 'TZ=$(getprop persist.sys.timezone) date '"$1" >/dev/null; }
 
 restart_app() {
     adb shell am force-stop $PKG
@@ -98,17 +108,12 @@ SCREEN_H=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1 | cut -dx -f2)
 log "screen height $SCREEN_H"
 adb shell settings put global auto_time 0
 adb shell settings put global auto_time_zone 0
-adb shell setprop persist.sys.timezone Asia/Kolkata
 adb shell cmd uimode night no
 set_clock 102114202026.00
-# Tidy status bar.
-adb shell settings put global sysui_demo_allowed 1
-adb shell am broadcast -a com.android.systemui.demo -e command enter >/dev/null
-adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 82 -e plugged false >/dev/null
-adb shell am broadcast -a com.android.systemui.demo -e command network -e wifi show -e level 4 >/dev/null
-adb shell am broadcast -a com.android.systemui.demo -e command notifications -e visible false >/dev/null
-adb shell am broadcast -a com.android.systemui.demo -e command exit >/dev/null
 
+# Give a freshly booted emulator time to settle before driving it.
+sleep 45
+dump
 adb install -r "$APK"
 adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS
 restart_app

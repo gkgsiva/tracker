@@ -43,6 +43,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disk-size: 3G
+          ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash docs/screenshots/capture.sh
@@ -70,7 +71,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/screenshots/*.png
+          git add -A docs/screenshots
           git diff --cached --quiet && exit 0
           git commit -m "Update user guide screenshots"
           git push
