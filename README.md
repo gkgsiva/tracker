@@ -28,7 +28,7 @@ The History screen shows daily (last 14 days), weekly (last 8 weeks) and monthly
 with inside time, break time and the 8h target, plus LOP days (highlighted in red on the daily chart) and counts of late logins and days under 8h.
 
 Each day has a type: **Office** (default), **WFH** (only the first login and last logout count, no breaks,
-same LOP rules), **Holiday** or **On leave** (no login needed, never LOP). History and reports count WFH,
+same LOP rules), **Holiday** or **On leave** (no login needed, never LOP), **Half day** or **Short leave** (see below). History and reports count WFH,
 holiday and leave days separately. The share icon sends a text report for a day, this week or this month through any app
 (WhatsApp, email, …).
 
@@ -50,18 +50,21 @@ While you're logged in, an ongoing notification counts down to the required hour
 and has Start break / End break / Log out buttons that work from the lock screen. A quick settings tile
 ("Office break") starts and ends breaks with one tap.
 
-**Gate auto-login** (optional, off until you set it up in Settings): stand at the office gate and save it as
-the gate, with a radius of 50–300 m (100 m by default). Walking in offers "Log in" (or "End break"), and
-walking out offers "Start break" or "Log out", each timed to when you crossed the gate. Nothing is recorded
-until you tap the notification. It needs precise location "Allow all the time"; Android watches the geofence
-itself, so the app still does no background work.
+**Planned breaks**: Start break asks how long the break will be (5 minutes to 1 hour, or no limit; your
+last choice comes first). A heads-up notification with an End break button arrives a couple of minutes
+before it ends (adjustable in Settings) and again when it does. Today shows the time left and lets you
+change the length mid-break. Breaks started from the widget, tile or notification use your last length.
+
+**Half day** and **Short leave** are day types too. A half day needs 4 hours inside at any time, with no
+core hours. Short leave (2 hours by default) needs that much less inside and eases core hours by the same
+amount at both ends (log in by 11:00, leave after 15:00). Both amounts are in Settings.
 
 There's also a home-screen widget (long-press the home screen → Widgets → Office Tracker) with a live counter
 and one-tap Log in / Start break / End break / Log out.
 
 Everything is stored locally on the phone in a Room (SQLite) database. Nothing runs in the background: the
-live counter only ticks while the app is open, reminders are a few one-shot alarms, and the gate is a
-system geofence.
+live counter only ticks while the app is open, and reminders are a few one-shot alarms. The app asks for no
+location access (the gate auto-login from 1.1 was removed in 1.8).
 
 Default rules live in `app/src/main/java/com/gkgsiva/tracker/domain/Rules.kt`.
 

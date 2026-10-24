@@ -125,7 +125,7 @@ class TrackerWidget : AppWidgetProvider() {
 
         /**
          * Broadcast that records [action] without opening the app: right now, or at [atMillis]
-         * (epoch millis) when given, e.g. the moment you passed the gate.
+         * (epoch millis) when given, e.g. the time a notification was posted.
          */
         fun punchIntent(context: Context, action: Action, atMillis: Long? = null): PendingIntent {
             val intent = Intent(context, TrackerWidget::class.java)

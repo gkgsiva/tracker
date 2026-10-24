@@ -4,9 +4,11 @@ import android.content.Context
 import com.gkgsiva.tracker.data.AppDatabase
 import com.gkgsiva.tracker.data.DayEntity
 import com.gkgsiva.tracker.data.PunchEntity
+import com.gkgsiva.tracker.domain.BreakPlan
 import com.gkgsiva.tracker.domain.DayCalculator
 import com.gkgsiva.tracker.domain.DaySummary
 import com.gkgsiva.tracker.domain.DayType
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -40,10 +42,22 @@ object Tracker {
         )
     }
 
-    /** Records a login/break end (isIn), break start or logout, now or at [at] (e.g. a gate swipe). */
-    suspend fun punchNow(context: Context, isIn: Boolean, isLogout: Boolean = false, at: LocalDateTime = LocalDateTime.now()) {
+    /**
+     * Records a login/break end (isIn), break start or logout, now or at [at] (e.g. from a notification).
+     * A break start is planned to last [breakMinutes], by default the length chosen in Settings.
+     */
+    suspend fun punchNow(
+        context: Context,
+        isIn: Boolean,
+        isLogout: Boolean = false,
+        at: LocalDateTime = LocalDateTime.now(),
+        breakMinutes: Int? = SettingsStore.get(context).breakPlanMinutes,
+    ) {
         val now = at.withNano(0)
-        GateMonitor.cancelPrompt(context)
+        Reminders.cancelPlanAlert(context)
+        if (!isIn && !isLogout) {
+            BreakPlans.set(context, breakMinutes?.let { BreakPlan(now.toLocalDate(), now.toLocalTime(), Duration.ofMinutes(it.toLong())) })
+        }
         val dao = AppDatabase.get(context).punchDao()
         // Logging in on a weekly off day turns it into a working day.
         if (isIn && summary(context, now.toLocalDate(), now).type == DayType.WEEKLY_OFF) {

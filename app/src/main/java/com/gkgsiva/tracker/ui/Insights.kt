@@ -2,6 +2,7 @@ package com.gkgsiva.tracker.ui
 
 import com.gkgsiva.tracker.domain.DayStatus
 import com.gkgsiva.tracker.domain.DaySummary
+import com.gkgsiva.tracker.domain.DayType
 import com.gkgsiva.tracker.domain.Rules
 import java.time.Duration
 import java.time.LocalDate
@@ -61,7 +62,7 @@ object Insights {
         val days = generateSequence(start) { it.plusDays(1) }.takeWhile { it <= endInclusive }.map(summaryOf).toList()
         val counted = days.filter { !it.dayOff && (it.date >= today || it.worked) }
         val finished = counted.filter { it.date < today || (it.date == today && it.finished) }
-        val met = finished.count { it.inside >= rules.requiredInside }
+        val met = finished.count { it.targetMet }
         return Outlook(
             start = start,
             endInclusive = endInclusive,
@@ -79,6 +80,8 @@ object Insights {
         val rules = s.rules
         return when {
             s.dayOff -> null
+            s.status == DayStatus.NOT_STARTED && s.type == DayType.HALF_DAY ->
+                Forecast(false, "Half day: ${rules.requiredInside.formatShort()} inside at any time")
             s.status == DayStatus.NOT_STARTED -> if (now < rules.arriveBy) {
                 Forecast(false, "Log in by ${rules.arriveBy.formatClock()} (${java.time.Duration.between(now, rules.arriveBy).formatHm()} left) to avoid LOP")
             } else {

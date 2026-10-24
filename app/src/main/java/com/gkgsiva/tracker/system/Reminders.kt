@@ -14,10 +14,12 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.gkgsiva.tracker.R
 import com.gkgsiva.tracker.domain.DayStatus
+import com.gkgsiva.tracker.domain.DayType
 import com.gkgsiva.tracker.ui.Insights
 import com.gkgsiva.tracker.ui.MainActivity
 import com.gkgsiva.tracker.ui.formatClock
 import com.gkgsiva.tracker.ui.formatHm
+import com.gkgsiva.tracker.ui.formatShort
 import com.gkgsiva.tracker.ui.metText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +44,9 @@ object Reminders {
     private const val TARGET = 4
     /** Summary of the month that just ended, on the 1st. */
     private const val MONTH = 5
+    /** Heads-up before a planned break ends, then again when it does. */
+    private const val PLAN = 6
+    private const val PLAN_CHANNEL = "breakPlan"
     private val MONTH_AT: LocalTime = LocalTime.of(10, 0)
     private const val EXTRA_KIND = "kind"
     private val LOGIN_LEAD: Duration = Duration.ofMinutes(15)
@@ -49,7 +54,7 @@ object Reminders {
 
     suspend fun reschedule(context: Context) {
         val am = context.getSystemService(AlarmManager::class.java)
-        listOf(LOGIN, LEAVE, BREAK, TARGET, MONTH).forEach { am.cancel(pending(context, it)) }
+        listOf(LOGIN, LEAVE, BREAK, TARGET, MONTH, PLAN).forEach { am.cancel(pending(context, it)) }
 
         val settings = SettingsStore.get(context)
         val now = LocalDateTime.now()
@@ -63,10 +68,11 @@ object Reminders {
             // Next working day (today included) where the reminder time is still ahead.
             for (offset in 0L..14L) {
                 val date = now.toLocalDate().plusDays(offset)
-                val at = date.atTime(settings.rules.arriveBy).minus(LOGIN_LEAD)
-                if (at <= now) continue
                 val day = if (offset == 0L) today else Tracker.summary(context, date, now)
-                if (day.dayOff || day.worked) continue
+                // A half day has no login deadline.
+                if (day.dayOff || day.worked || day.type == DayType.HALF_DAY) continue
+                val at = date.atTime(day.rules.arriveBy).minus(LOGIN_LEAD)
+                if (at <= now) continue
                 set(context, am, LOGIN, at)
                 break
             }
@@ -83,6 +89,11 @@ object Reminders {
                 val end = now.toLocalDate().atTime(returnBy)
                 set(context, am, BREAK, if (end.minus(BREAK_LEAD) > now) end.minus(BREAK_LEAD) else end)
             }
+        }
+        BreakPlans.current(context, today)?.let { plan ->
+            val end = now.toLocalDate().atTime(plan.end)
+            val heads = end.minusMinutes(settings.breakPlanLeadMinutes.toLong())
+            set(context, am, PLAN, if (heads > now) heads else end)
         }
     }
 
@@ -130,6 +141,12 @@ object Reminders {
                 ).joinToString(" · ")
                 notify(context, kind, "${start.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} summary", text)
             }
+            PLAN -> BreakPlans.current(context, s)?.let { plan ->
+                val left = plan.left(now.toLocalTime())
+                val title = if (left.seconds > 30) "Break ends in ${left.plusSeconds(30).formatShort()}"
+                else "Your ${plan.length.formatShort()} break is up"
+                planAlert(context, title, "Planned to be back at ${plan.end.formatClock()}. ${s.breaks.formatHm()} of break today.")
+            }
             BREAK -> if (s.status == DayStatus.ON_BREAK) {
                 val returnBy = s.returnBy
                 if (returnBy != null && s.breakLeft > Duration.ofMinutes(1)) {
@@ -141,6 +158,37 @@ object Reminders {
         }
         Tracker.onChanged(context)
     }
+
+    /** A heads-up notification (it pops up and makes a sound) with an End break button. */
+    private fun planAlert(context: Context, title: String, text: String) {
+        if (!canNotify(context)) return
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(NotificationChannel(PLAN_CHANNEL, "Planned break ending", NotificationManager.IMPORTANCE_HIGH))
+        val open = PendingIntent.getActivity(
+            context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(context, PLAN_CHANNEL)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentIntent(open)
+            .addAction(0, "End break", TrackerWidget.punchIntent(context, TrackerWidget.Companion.Action.BREAK_END))
+            .setAutoCancel(true)
+            .build()
+        nm.notify(PLAN, notification)
+    }
+
+    /** Clears the break alert once the break is over. */
+    fun cancelPlanAlert(context: Context) {
+        context.getSystemService(NotificationManager::class.java).cancel(PLAN)
+    }
+
+    private fun canNotify(context: Context) = Build.VERSION.SDK_INT < 33 ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
     private fun notify(context: Context, id: Int, title: String, text: String) {
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -169,10 +217,9 @@ object Reminders {
         }
     }
 
-    /** Re-arms reminders and the gate geofence after a reboot or app update, since neither survives those. */
+    /** Re-arms reminders after a reboot or app update, since alarms don't survive those. */
     class BootReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            GateMonitor.register(context)
             goAsyncIo { Tracker.onChanged(context) }
         }
     }
