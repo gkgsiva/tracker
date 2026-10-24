@@ -53,16 +53,20 @@ EOF
 }
 
 tap() {
-    dump
+    # A few tries, since a slow emulator may still be drawing the screen.
     local xy
-    if xy=$(find_node "$1" "${2:-first}"); then
-        adb shell input tap $xy
-        sleep "${3:-1.5}"
-    else
-        echo "WARN: no '$1' on screen"
-        cp "$DEBUG/ui.xml" "$DEBUG/missing-$(echo "$1" | tr -c 'A-Za-z0-9' _).xml"
-        return 1
-    fi
+    for _ in 1 2 3 4; do
+        dump
+        if xy=$(find_node "$1" "${2:-first}"); then
+            adb shell input tap $xy
+            sleep "${3:-1.5}"
+            return 0
+        fi
+        sleep 2
+    done
+    echo "WARN: no '$1' on screen"
+    cp "$DEBUG/ui.xml" "$DEBUG/missing-$(echo "$1" | tr -c 'A-Za-z0-9' _).xml"
+    return 1
 }
 
 swipe_up() { adb shell input swipe 540 $((SCREEN_H * 3 / 4)) 540 $((SCREEN_H / 4)) 400; sleep 1; }
@@ -119,6 +123,7 @@ adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS
 restart_app
 
 # --- Demo data: Clear data, swap the kept copy for seed.csv, then Undo ----------------------
+sleep 10
 tap Settings bottom
 scroll_to "Clear all data" && tap "Clear all data"
 shot clear-confirm
