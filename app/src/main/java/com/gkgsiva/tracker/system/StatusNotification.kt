@@ -26,7 +26,12 @@ import com.gkgsiva.tracker.ui.formatShort
  * punches. Its buttons work from the lock screen.
  */
 object StatusNotification {
-    private const val CHANNEL = "status"
+    /**
+     * A default-importance channel (with no sound) so phones that hide silent notifications on
+     * the lock screen still show it there. Replaces the low-importance "status" channel used before 1.10.
+     */
+    private const val CHANNEL = "status_lock"
+    private const val OLD_CHANNEL = "status"
     private const val ID = 10
 
     fun update(context: Context, s: DaySummary) {
@@ -36,9 +41,12 @@ object StatusNotification {
             nm.cancel(ID)
             return
         }
+        nm.deleteNotificationChannel(OLD_CHANNEL)
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Status while logged in", NotificationManager.IMPORTANCE_LOW).apply {
+            NotificationChannel(CHANNEL, "Status while logged in", NotificationManager.IMPORTANCE_DEFAULT).apply {
                 setShowBadge(false)
+                setSound(null, null)
+                enableVibration(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
         )

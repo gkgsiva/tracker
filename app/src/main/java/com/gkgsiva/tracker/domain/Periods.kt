@@ -19,6 +19,11 @@ data class PeriodSummary(
     val wfhDays: Int,
     val holidays: Int,
     val leaveDays: Int,
+    /** Finished working days that reached their required hours. */
+    val metDays: Int = 0,
+    val regularizedDays: Int = 0,
+    val halfDays: Int = 0,
+    val shortLeaveDays: Int = 0,
 ) {
     val avgInside: Duration get() = if (daysWorked == 0) Duration.ZERO else totalInside.dividedBy(daysWorked.toLong())
     val avgBreaks: Duration get() = if (daysWorked == 0) Duration.ZERO else totalBreaks.dividedBy(daysWorked.toLong())
@@ -46,6 +51,12 @@ object Periods {
         }
     }
 
+    /** Each month of [year], January first. */
+    fun year(days: Map<LocalDate, DaySummary>, year: Int): List<PeriodSummary> = (1..12).map { m ->
+        val month = YearMonth.of(year, m)
+        summarize(days, month.atDay(1), month.atEndOfMonth())
+    }
+
     fun summarize(days: Map<LocalDate, DaySummary>, start: LocalDate, endInclusive: LocalDate): PeriodSummary {
         val all = days.values.filter { it.date >= start && it.date <= endInclusive }
         val inRange = all.filter { it.worked }
@@ -61,6 +72,10 @@ object Periods {
             wfhDays = inRange.count { it.wfh },
             holidays = all.count { it.type == DayType.HOLIDAY },
             leaveDays = all.count { it.type == DayType.LEAVE },
+            metDays = inRange.count { it.finished && it.targetMet },
+            regularizedDays = inRange.count { it.isRegularized },
+            halfDays = all.count { it.type == DayType.HALF_DAY },
+            shortLeaveDays = all.count { it.type == DayType.SHORT_LEAVE },
         )
     }
 }

@@ -328,4 +328,24 @@ class DayCalculatorTest {
         val nextBreak = DayCalculator.summarize(day, listOf(inAt(8, 30), outAt(13, 0), inAt(13, 12), outAt(15, 0)), now = t(15, 5))
         assertFalse(plan.appliesTo(nextBreak))
     }
+
+    @Test
+    fun yearSplitsIntoMonthsWithCounts() {
+        val jan = LocalDate.of(2026, 1, 5)
+        val days = mapOf(
+            jan to DayCalculator.summarize(jan, listOf(inAt(8, 30), logoutAt(17, 30)), null),
+            jan.plusDays(1) to DayCalculator.summarize(jan.plusDays(1), listOf(inAt(9, 30), logoutAt(18, 0)), null, regularized = ""),
+            jan.plusDays(2) to DayCalculator.summarize(jan.plusDays(2), emptyList(), null, type = DayType.LEAVE),
+            jan.plusDays(3) to DayCalculator.summarize(jan.plusDays(3), listOf(inAt(13, 0), logoutAt(17, 0)), null, type = DayType.HALF_DAY),
+        )
+        val year = Periods.year(days, 2026)
+        assertEquals(12, year.size)
+        val j = year.first()
+        assertEquals(3, j.metDays)
+        assertEquals(0, j.lopDays)
+        assertEquals(1, j.regularizedDays)
+        assertEquals(1, j.leaveDays)
+        assertEquals(1, j.halfDays)
+        assertEquals(0, year[1].daysWorked)
+    }
 }
