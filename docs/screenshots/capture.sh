@@ -130,6 +130,8 @@ shot today-missed-logout
 tap "Add logout" first 2
 shot add-entry-dialog
 tap Save first 2
+scroll_to Changes && shot day-changes
+scroll_to "Edit day" && tap "Edit day" && { shot edit-day-dialog; tap Cancel; }
 tap Today top 2         # the "Today" button beside the date
 to_top
 shot today-inside 3
@@ -138,7 +140,8 @@ shot today-stats
 scroll_to Entries
 shot today-entries
 to_top
-tap "Start break" first 3
+tap "Start break" first 2 && { shot break-plan-dialog; tap "Start break" first 3; }
+to_top
 shot today-on-break 2
 
 adb shell cmd statusbar expand-notifications
@@ -150,7 +153,15 @@ adb shell cmd statusbar expand-settings
 shot quick-settings-tile 3
 adb shell cmd statusbar collapse
 sleep 1
+# Jump 14 minutes ahead so the 15-minute planned break's heads-up (2 minutes before) fires.
+set_clock 102114352026.00
+sleep 12
+adb shell cmd statusbar expand-notifications
+shot notification-break-ending 2
+adb shell cmd statusbar collapse
+sleep 1
 
+to_top
 tap "End break" first 2
 tap "Log out" first 1.5
 shot logout-warning
@@ -163,37 +174,40 @@ adb shell input keyevent KEYCODE_BACK; sleep 1
 tap History bottom
 to_top
 shot history-calendar 2
-swipe_up
-shot history-daily
-tap Weekly && { to_top; scroll_to "Average per working day"; shot history-weekly; }
+dump; if xy=$(find_node 27); then adb shell input swipe $xy $xy 900; sleep 1.5; shot calendar-long-press; adb shell input keyevent KEYCODE_BACK; sleep 1; fi
 to_top
+scroll_to Daily && shot history-daily
+tap Weekly && { scroll_to "Average per working day"; shot history-weekly; }
 tap Monthly && { scroll_to "Average per working day"; shot history-monthly; }
-scroll_to "Leave & holidays"
-shot history-targets
+tap Year && { scroll_to Year; shot history-year; }
+tap Daily
+scroll_to "Leave & holidays" && shot history-targets
+scroll_to "Regularized (1)" && shot history-regularized
 to_top
+scroll_to Daily
 tap "Share report" && { shot share-dialog; tap Cancel; }
 
-# A late login day (LOP) and its Regularize dialog.
-to_top
-tap 7 first 2 && {
+# Single days, opened from the calendar.
+open_day() { tap History bottom; to_top; tap "$1" first 2; }
+open_day 7 && {
     scroll_to "LOP day"; shot day-lop
     tap Regularize && { adb shell input text "Approved%sby%smanager"; adb shell input keyevent KEYCODE_BACK; sleep 1; shot regularize-dialog; tap Cancel; }
 }
-tap History bottom; to_top
-tap 13 first 2 && { scroll_to Regularized; shot day-regularized; }
-tap History bottom; to_top
-tap 16 first 2 && { to_top; shot day-entry-check; }
-tap History bottom; to_top
-tap 9 first 2 && { to_top; shot day-wfh; }
-tap History bottom; to_top
-tap 30 first 2 && { to_top; shot day-planned-leave; }
+open_day 13 && { scroll_to Regularized; shot day-regularized; }
+open_day 16 && { to_top; shot day-entry-check; }
+open_day 9 && { to_top; shot day-wfh; }
+open_day 14 && { to_top; shot day-half; }
+open_day 6 && { to_top; shot day-short-leave; }
+open_day 30 && { to_top; shot day-planned-leave; }
 
 # --- Settings ----------------------------------------------------------------------------
 tap Settings bottom
 to_top
 shot settings-rules
+scroll_to "Half day and short leave" && shot settings-part-days
 scroll_to Reminders && shot settings-reminders
 scroll_to "Clear all data" && shot settings-backup
+to_top
 tap Dark && { tap Today bottom; tap Today top; to_top; shot today-dark 3; tap Settings bottom; to_top; tap System; }
 
 # --- Month summary on the 1st ------------------------------------------------------------

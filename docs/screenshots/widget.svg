@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="540" height="300" viewBox="0 0 540 300" font-family="Roboto, Arial, sans-serif">
+  <!-- Drawing of the home-screen widget (layout/widget.xml, light colors). -->
+  <rect width="540" height="300" fill="#5B7F86"/>
+  <rect x="40" y="40" width="460" height="220" rx="28" fill="#F4FBFB"/>
+  <text x="72" y="88" font-size="22" font-weight="bold" fill="#00696E">Inside office</text>
+  <text x="72" y="140" font-size="44" font-family="monospace" fill="#161D1D">4:48:12</text>
+  <text x="72" y="170" font-size="18" fill="#3F4949">inside · leave at 5:32 PM</text>
+  <rect x="72" y="190" width="190" height="48" rx="24" fill="#00696E"/>
+  <text x="167" y="221" font-size="18" fill="#FFFFFF" text-anchor="middle">START BREAK</text>
+  <rect x="278" y="190" width="190" height="48" rx="24" fill="#DAE5E4"/>
+  <text x="373" y="221" font-size="18" fill="#161D1D" text-anchor="middle">LOG OUT</text>
+</svg>
