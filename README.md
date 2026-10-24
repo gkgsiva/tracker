@@ -46,6 +46,15 @@ change made by hand (there or entry by entry) is written to the day's **Changes*
 → 8:55 AM · forgot to swipe". History lists every **regularized** day with its reason, note and the date it
 was regularized, and can share that list.
 
+History's **Year** tab shows each month of a year on one screen: days that met the hours, LOP, regularized,
+leave, holidays, and half days or short leave, with totals. The share button there can also make a one-page
+**PDF month sheet** (this month or last) with every day's login, logout, breaks, hours and status.
+
+The home-screen widget shows only timers the system draws and fixed times, so it stays current between
+updates (on a break it counts the day's break time and shows when you're due back). The status
+notification now uses a channel that shows on the lock screen even on phones that hide silent
+notifications there, so you can see the time left without unlocking.
+
 **Settings** lets you change the rules (core login-by and leave-after, hours inside, official start and end), choose light, dark or system theme, pick weekly
 off days (Saturday and Sunday by default), turn reminders on or off (login reminder 15 minutes before the
 deadline, "you can leave now", and "break allowance used"), export or import a CSV backup, turn on a weekly automatic backup to a folder you pick (a dated CSV each

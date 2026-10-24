@@ -1,5 +1,6 @@
 package com.gkgsiva.tracker.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -28,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.data.PunchEntity
 import com.gkgsiva.tracker.domain.DaySummary
@@ -42,11 +47,14 @@ import com.gkgsiva.tracker.domain.DayType
 import com.gkgsiva.tracker.domain.Settings
 import com.gkgsiva.tracker.domain.PeriodSummary
 import com.gkgsiva.tracker.domain.Periods
+import com.gkgsiva.tracker.system.MonthSheet
+import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
-private enum class Range(val label: String) { DAILY("Daily"), WEEKLY("Weekly"), MONTHLY("Monthly") }
+private enum class Range(val label: String) { DAILY("Daily"), WEEKLY("Weekly"), MONTHLY("Monthly"), YEARLY("Year") }
 
 private val dayLabel = DateTimeFormatter.ofPattern("d")
 private val dayRowFormat = DateTimeFormatter.ofPattern("EEE, d MMM")
@@ -76,6 +84,15 @@ fun HistoryScreen(
     val target = settings.rules.requiredInside
     var sharing by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    fun sharePdf(month: YearMonth) {
+        sharing = false
+        scope.launch {
+            runCatching { MonthSheet.write(context, month) }
+                .onSuccess { MonthSheet.share(context, it, "Office hours ${month.format(monthRowFormat)}") }
+                .onFailure { Toast.makeText(context, "Couldn't make the PDF: ${it.message}", Toast.LENGTH_LONG).show() }
+        }
+    }
     var range by rememberSaveable { mutableIntStateOf(0) }
     val selected = Range.entries[range]
 
@@ -85,9 +102,9 @@ fun HistoryScreen(
     ) {
         CalendarCard(today, ::summaryOf, onOpenDay, onSetType)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             Range.entries.forEach { r ->
-                FilterChip(selected = r == selected, onClick = { range = r.ordinal }, label = { Text(r.label) })
+                FilterChip(selected = r == selected, onClick = { range = r.ordinal }, label = { Text(r.label, maxLines = 1) })
             }
             Spacer(Modifier.weight(1f))
             IconButton(onClick = { sharing = true }) {
@@ -109,6 +126,7 @@ fun HistoryScreen(
                 barLabel = { it.start.format(monthLabel) },
                 rowLabel = { it.start.format(monthRowFormat) },
             )
+            Range.YEARLY -> YearView(summaries, today)
         }
 
         TargetsCard(
@@ -137,6 +155,9 @@ fun HistoryScreen(
                     }) { Text("Today") }
                     TextButton(onClick = { share("Office report this week", Reports.week(summaries, today)) }) { Text("This week") }
                     TextButton(onClick = { share("Office report this month", Reports.month(summaries, today)) }) { Text("This month") }
+                    HorizontalDivider()
+                    TextButton(onClick = { sharePdf(YearMonth.from(today)) }) { Text("This month as PDF") }
+                    TextButton(onClick = { sharePdf(YearMonth.from(today).minusMonths(1)) }) { Text("Last month as PDF") }
                 }
             },
             confirmButton = {},
@@ -407,6 +428,59 @@ private fun RegularizedCard(days: List<DaySummary>, regularizedOn: Map<LocalDate
                     }
                 }
             }
+        }
+    }
+}
+
+/** One row per month of a year: days that met the hours, LOP, regularized, leave, holidays, half and short days. */
+@Composable
+private fun YearView(summaries: Map<LocalDate, DaySummary>, today: LocalDate) {
+    var year by rememberSaveable { mutableIntStateOf(today.year) }
+    val months = Periods.year(summaries, year)
+    val columns = listOf("Met", "LOP", "Reg.", "Leave", "Hol.", "½ / SL")
+    fun cells(p: PeriodSummary) = listOf(p.metDays, p.lopDays, p.regularizedDays, p.leaveDays, p.holidays, p.halfDays + p.shortLeaveDays)
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { year-- }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous year") }
+                Text("$year", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                IconButton(onClick = { year++ }, enabled = year < today.year + 1) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next year")
+                }
+            }
+            YearRow("", columns, bold = true)
+            HorizontalDivider()
+            months.forEach { p ->
+                val future = p.start > today
+                YearRow(p.start.format(monthLabel), if (future && cells(p).all { it == 0 }) columns.map { "" } else cells(p).map { "$it" }, lop = true)
+            }
+            HorizontalDivider()
+            YearRow("Total", months.map(::cells).reduce { a, b -> a.zip(b) { x, y -> x + y } }.map { "$it" }, bold = true, lop = true)
+            Text(
+                "Met: working days that reached the required hours. Reg.: regularized. ½ / SL: half days and short leave. " +
+                    "Total inside this year: ${months.fold(Duration.ZERO) { acc, p -> acc + p.totalInside }.formatHm()}.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun YearRow(label: String, values: List<String>, bold: Boolean = false, lop: Boolean = false) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1.3f), fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal, style = MaterialTheme.typography.bodyMedium)
+        values.forEachIndexed { i, v ->
+            Text(
+                v,
+                Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
+                // The LOP column.
+                color = if (lop && i == 1 && v != "0") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }

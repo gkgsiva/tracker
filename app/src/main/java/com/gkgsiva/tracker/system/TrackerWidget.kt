@@ -68,22 +68,27 @@ class TrackerWidget : AppWidgetProvider() {
                 when (s.status) {
                     DayStatus.NOT_STARTED -> "Not logged in"
                     DayStatus.INSIDE -> if (s.wfh) "Working from home" else "Inside office"
-                    DayStatus.ON_BREAK -> "On break · ${s.breaks.formatHm()} used"
+                    DayStatus.ON_BREAK -> "On break since ${s.lastOut?.formatClock()}"
                     DayStatus.DONE -> if (s.lop) "Logged out · LOP" else "Day complete"
                     DayStatus.MISSING_CHECKOUT -> "Missing logout"
                     DayStatus.DAY_OFF -> s.type.label
                 },
             )
+            // Everything shown is either a system-drawn timer or a fixed time, so it stays right between updates.
+            val onBreak = s.status == DayStatus.ON_BREAK
             views.setChronometer(
                 R.id.widget_inside,
-                SystemClock.elapsedRealtime() - s.inside.toMillis(),
+                SystemClock.elapsedRealtime() - (if (onBreak) s.breaks else s.inside).toMillis(),
                 null,
-                s.status == DayStatus.INSIDE,
+                s.status == DayStatus.INSIDE || onBreak,
             )
+            val plan = BreakPlans.current(context, s)
             views.setTextViewText(
                 R.id.widget_detail,
                 when {
                     s.dayOff -> "No login needed"
+                    onBreak -> "break today · " + (plan?.let { "back at ${it.end.formatClock()}" }
+                        ?: s.returnBy?.let { "back by ${it.formatClock()}" } ?: "over the allowance")
                     s.expectedLeave != null -> "inside · leave at ${s.expectedLeave.formatClock()}"
                     else -> "inside of ${s.rules.requiredInside.formatHm()}"
                 },
