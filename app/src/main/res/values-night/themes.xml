@@ -1,0 +1,4 @@
+<resources>
+    <!-- Dark window behind the app while it starts, so dark mode doesn't flash white. -->
+    <style name="Theme.OfficeTracker" parent="android:Theme.Material.NoActionBar" />
+</resources>

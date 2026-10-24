@@ -4,6 +4,7 @@ import android.content.Context
 import com.gkgsiva.tracker.domain.Gate
 import com.gkgsiva.tracker.domain.Rules
 import com.gkgsiva.tracker.domain.Settings
+import com.gkgsiva.tracker.domain.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.time.DayOfWeek
@@ -34,6 +35,7 @@ object SettingsStore {
             .putBoolean("remindLeave", settings.remindLeave)
             .putBoolean("remindBreak", settings.remindBreak)
             .putBoolean("statusNotification", settings.statusNotification)
+            .putString("theme", settings.theme.name)
             .apply {
                 val gate = settings.gate
                 if (gate == null) {
@@ -67,6 +69,7 @@ object SettingsStore {
             remindLeave = p.getBoolean("remindLeave", d.remindLeave),
             remindBreak = p.getBoolean("remindBreak", d.remindBreak),
             statusNotification = p.getBoolean("statusNotification", d.statusNotification),
+            theme = ThemeMode.entries.firstOrNull { it.name == p.getString("theme", null) } ?: d.theme,
             gate = if (p.contains("gateLat") && p.contains("gateLng")) {
                 Gate(
                     Double.fromBits(p.getLong("gateLat", 0)),

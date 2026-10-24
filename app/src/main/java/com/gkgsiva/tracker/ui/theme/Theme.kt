@@ -10,13 +10,18 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.gkgsiva.tracker.domain.ThemeMode
 
 private val Teal = Color(0xFF00696E)
 private val Amber = Color(0xFF8B5000)
 
 @Composable
-fun TrackerTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
+fun TrackerTheme(mode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () -> Unit) {
+    val dark = when (mode) {
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    }
     val colors = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current

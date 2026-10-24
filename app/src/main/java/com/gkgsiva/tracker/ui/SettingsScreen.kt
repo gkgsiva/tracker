@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.BuildConfig
 import com.gkgsiva.tracker.domain.Rules
 import com.gkgsiva.tracker.domain.Settings
+import com.gkgsiva.tracker.domain.ThemeMode
 import com.gkgsiva.tracker.system.GateMonitor
 import java.time.DayOfWeek
 import java.time.Duration
@@ -110,6 +111,20 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
                     "${rules.breakAllowance(null).formatShort()}, earlier gives more. A longer break isn't LOP; you just stay later."
             )
             TimeSetting.entries.drop(2).forEach { SettingRow(it.label, it.get(rules).formatClock(), onClick = { editingTime = it }) }
+        }
+
+        Section("Appearance") {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ThemeMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = settings.theme == mode,
+                        onClick = { update(settings.copy(theme = mode)) },
+                        modifier = Modifier.weight(1f),
+                        label = { Text(mode.label, Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
+                    )
+                }
+            }
+            Hint("System follows your phone's dark mode setting.")
         }
 
         Section("Weekly off days") {

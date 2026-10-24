@@ -2,9 +2,13 @@ package com.gkgsiva.tracker.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -50,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -68,6 +73,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 private val dateFormat = DateTimeFormatter.ofPattern("EEE, d MMM yyyy")
+private val shortDateFormat = DateTimeFormatter.ofPattern("EEE, d MMM")
 
 /** What a punch means to the user. Stored as isIn + isLogout. */
 private enum class EntryKind(val label: String, val isIn: Boolean, val isLogout: Boolean) {
@@ -130,9 +136,12 @@ fun TodayScreen(
             IconButton(onClick = { selectedEpochDay-- }) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous day")
             }
+            // The year only when it isn't this year, so the date fits beside the buttons.
+            val shown = date.format(if (date.year == today.year) shortDateFormat else dateFormat)
             Text(
-                if (isToday) "Today · ${date.format(dateFormat)}" else date.format(dateFormat),
+                if (isToday) "Today · $shown" else shown,
                 style = MaterialTheme.typography.titleMedium,
+                maxLines = 2,
                 modifier = Modifier.weight(1f).clickable { pickingDate = true }.padding(vertical = 8.dp),
             )
             if (!isToday) {
@@ -147,26 +156,6 @@ fun TodayScreen(
         }
 
         StatusCard(summary, live = isToday, future = isFuture)
-
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    DayType.entries.filter { it.choosable }.forEach { t ->
-                        ChoiceChip(t.label, selected = type == t, onClick = { vm.setDayType(date, t) }, Modifier.weight(1f))
-                    }
-                }
-                Text(
-                    when (type) {
-                        DayType.OFFICE -> "Login, breaks and logout are tracked"
-                        DayType.WFH -> "Only first login and last logout count"
-                        DayType.HOLIDAY, DayType.LEAVE -> "No login needed, never LOP"
-                        DayType.WEEKLY_OFF -> "Weekly off · pick Office if you're working"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
 
         if (isToday && type == DayType.WEEKLY_OFF) {
             OutlinedButton(onClick = { vm.punchNow(isIn = true) }, modifier = Modifier.fillMaxWidth()) {
@@ -186,17 +175,6 @@ fun TodayScreen(
             )
         }
 
-        LopCard(summary, onRegularize = { note -> vm.setRegularized(date, summary.type, note) })
-
-        if (isToday) {
-            fun summaryOf(d: LocalDate) = summarizeDay(d, punchesByDay[d].orEmpty(), now, dayTypes[d], settings, regularized[d])
-            val monthStart = today.withDayOfMonth(1)
-            OutlookCard(
-                forecast = Insights.forecast(summary, now.toLocalTime()),
-                month = Insights.outlook(monthStart, monthStart.plusMonths(1).minusDays(1), today, rules, ::summaryOf),
-            )
-        }
-
         if (!summary.dayOff && !isFuture) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatTile(if (wfh) "Worked" else "Inside", summary.inside.formatHm(), Modifier.weight(1f))
             if (!wfh) {
@@ -211,9 +189,27 @@ fun TodayScreen(
             StatTile("To go", summary.remaining.formatHm(), Modifier.weight(1f), sub = "of ${rules.requiredInside.formatShort()}")
         }
 
+        LopCard(summary, onRegularize = { note -> vm.setRegularized(date, summary.type, note) })
+
+        // A day off with nothing logged stays quiet: no stats, outlook or empty entry list.
+        val quiet = summary.dayOff && punches.isEmpty()
+
+        if (isToday && !quiet) {
+            fun summaryOf(d: LocalDate) = summarizeDay(d, punchesByDay[d].orEmpty(), now, dayTypes[d], settings, regularized[d])
+            val monthStart = today.withDayOfMonth(1)
+            OutlookCard(
+                forecast = Insights.forecast(summary, now.toLocalTime()),
+                month = Insights.outlook(monthStart, monthStart.plusMonths(1).minusDays(1), today, rules, ::summaryOf),
+            )
+        }
+
+        DayTypeRow(type, onPick = { vm.setDayType(date, it) })
+
         if (!summary.dayOff && !isFuture) DetailsCard(summary)
 
-        if (!isFuture) Card(Modifier.fillMaxWidth()) {
+        if (quiet && !isFuture) {
+            TextButton(onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) { Text("Add an entry for this day") }
+        } else if (!isFuture) Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(vertical = 8.dp)) {
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Entries", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
@@ -321,7 +317,7 @@ private fun DateDialog(initial: LocalDate, onDismiss: () -> Unit, onPick: (Local
     }
 }
 
-/** Equal-width chip with single-line, centered text, for a row of choices. */
+/** Equal-width chip with centered text that wraps rather than being cut off. */
 @Composable
 private fun ChoiceChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
     FilterChip(
@@ -332,13 +328,54 @@ private fun ChoiceChip(text: String, selected: Boolean, onClick: () -> Unit, mod
             Text(
                 text,
                 modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelLarge,
                 textAlign = TextAlign.Center,
-                maxLines = 1,
-                softWrap = false,
+                maxLines = 2,
             )
         },
     )
+}
+
+/** The day's type as one compact row; tapping it opens the choices with what each means. */
+@Composable
+private fun DayTypeRow(type: DayType, onPick: (DayType) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Card(Modifier.fillMaxWidth()) {
+        Box {
+            Row(
+                Modifier.fillMaxWidth().clickable { open = true }.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Day type", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(type.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(type.meaning(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text("Change", color = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                DayType.entries.filter { it.choosable }.forEach { t ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text(t.label, fontWeight = if (t == type) FontWeight.Bold else FontWeight.Normal)
+                                Text(t.meaning(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        },
+                        onClick = { open = false; if (t != type) onPick(t) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun DayType.meaning(): String = when (this) {
+    DayType.OFFICE -> "Login, breaks and logout are tracked"
+    DayType.WFH -> "Only first login and last logout count"
+    DayType.HOLIDAY, DayType.LEAVE -> "No login needed, never LOP"
+    DayType.WEEKLY_OFF -> "Weekly off · choose Office if you're working"
 }
 
 @Composable
@@ -351,7 +388,7 @@ private fun ActionButtons(
     onLogout: () -> Unit,
     onLeftDuringBreak: () -> Unit,
 ) {
-    val big = Modifier.height(64.dp)
+    val big = Modifier.heightIn(min = 64.dp)
     val tertiary = ButtonDefaults.buttonColors(
         containerColor = MaterialTheme.colorScheme.tertiary,
         contentColor = MaterialTheme.colorScheme.onTertiary,
@@ -395,7 +432,7 @@ private fun StatusCard(s: DaySummary, live: Boolean, future: Boolean) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text("Upcoming", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-                Text("${s.type.label} day · mark it Holiday or On leave below", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${s.type.label} day · change the day type below to plan leave", color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
             }
         }
         return
@@ -403,11 +440,11 @@ private fun StatusCard(s: DaySummary, live: Boolean, future: Boolean) {
     if (s.dayOff) {
         Card(Modifier.fillMaxWidth()) {
             Column(
-                Modifier.fillMaxWidth().padding(vertical = 40.dp),
+                Modifier.fillMaxWidth().padding(vertical = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text(s.type.label, style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
+                Text(s.type.label, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
                 Text(if (future) "Planned day off" else "Day off · no login needed", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -435,7 +472,7 @@ private fun StatusCard(s: DaySummary, live: Boolean, future: Boolean) {
                 if (live && (s.status == DayStatus.INSIDE || s.status == DayStatus.ON_BREAK)) PulsingDot(color)
                 Text(label, style = MaterialTheme.typography.titleMedium, color = color, fontWeight = FontWeight.SemiBold)
             }
-            val doneColor = if (isSystemInDarkTheme()) Color(0xFF81C784) else Color(0xFF2E7D32)
+            val doneColor = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) Color(0xFF81C784) else Color(0xFF2E7D32)
             val fill by animateColorAsState(
                 when {
                     s.finished && s.lop -> MaterialTheme.colorScheme.error
@@ -639,14 +676,18 @@ private fun PunchDialog(
         title = { Text(title) },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    EntryKind.entries.filter { !wfh || it != EntryKind.BREAK }.forEach { k ->
-                        ChoiceChip(
-                            if (k == EntryKind.IN) "In" else k.label,
-                            selected = kind == k,
-                            onClick = { kind = k },
-                            Modifier.weight(1f),
-                        )
+                // Two per row so the labels have room at any text size.
+                EntryKind.entries.filter { !wfh || it != EntryKind.BREAK }.chunked(2).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        row.forEach { k ->
+                            ChoiceChip(
+                                if (k == EntryKind.IN) "In" else k.label,
+                                selected = kind == k,
+                                onClick = { kind = k },
+                                Modifier.weight(1f),
+                            )
+                        }
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
                 Spacer(Modifier.height(12.dp))

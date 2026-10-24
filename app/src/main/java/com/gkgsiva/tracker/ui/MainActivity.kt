@@ -40,11 +40,11 @@ class MainActivity : ComponentActivity() {
         vm.refreshGate()
         enableEdgeToEdge()
         setContent {
-            TrackerTheme {
+            val settings by vm.settings.collectAsStateWithLifecycle()
+            TrackerTheme(settings.theme) {
                 val punchesByDay by vm.punchesByDay.collectAsStateWithLifecycle()
                 val dayTypes by vm.dayTypes.collectAsStateWithLifecycle()
                 val regularized by vm.regularized.collectAsStateWithLifecycle()
-                val settings by vm.settings.collectAsStateWithLifecycle()
                 var tab by rememberSaveable { mutableIntStateOf(0) }
 
                 // Reminders are on by default, so ask for notification permission once.
