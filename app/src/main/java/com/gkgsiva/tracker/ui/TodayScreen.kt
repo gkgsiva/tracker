@@ -185,6 +185,15 @@ fun TodayScreen(
 
         LopCard(summary)
 
+        if (isToday) {
+            fun summaryOf(d: LocalDate) = summarizeDay(d, punchesByDay[d].orEmpty(), now, dayTypes[d], settings)
+            val monthStart = today.withDayOfMonth(1)
+            OutlookCard(
+                forecast = Insights.forecast(summary, now.toLocalTime()),
+                month = Insights.outlook(monthStart, monthStart.plusMonths(1).minusDays(1), today, rules, ::summaryOf),
+            )
+        }
+
         if (!summary.dayOff && !isFuture) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatTile(if (wfh) "Worked" else "Inside", summary.inside.formatHm(), Modifier.weight(1f))
             if (!wfh) {
@@ -481,6 +490,25 @@ private fun LopCard(s: DaySummary) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("LOP day", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             s.lopReasons.forEach { Text("• ${it.describe(s)}") }
+        }
+    }
+}
+
+@Composable
+private fun OutlookCard(forecast: Forecast?, month: Outlook) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Outlook", style = MaterialTheme.typography.titleMedium)
+            forecast?.let {
+                Text(
+                    it.message,
+                    color = if (it.atRisk) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+            DetailLine("LOP days this month", "${month.lopDays}", warn = month.lopDays > 0)
+            DetailLine("This month", "${month.done.formatHm()} of ${month.target.formatShort()}")
+            Text(month.paceText(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -25,6 +25,18 @@ data class Outlook(
     val remaining: Duration get() = (target - done).coerceAtLeast(Duration.ZERO)
 }
 
+/** One-line pace summary, e.g. "Ahead by 1h 10m · need 7h 50m/day over 2 days". */
+fun Outlook.paceText(): String = buildList {
+    when {
+        balance.isNegative -> add("Behind by ${balance.negated().formatHm()}")
+        balance > Duration.ZERO -> add("Ahead by ${balance.formatHm()}")
+        else -> add("On pace")
+    }
+    val perDay = neededPerDay
+    if (perDay != null && remaining > Duration.ZERO) add("need ${perDay.formatHm()}/day over $daysLeft day${if (daysLeft == 1) "" else "s"}")
+    else if (remaining == Duration.ZERO) add("target reached")
+}.joinToString(" · ")
+
 /** Whether today is heading for LOP, and why. */
 data class Forecast(val atRisk: Boolean, val message: String)
 
