@@ -63,8 +63,10 @@ fun HistoryScreen(
     punchesByDay: Map<LocalDate, List<PunchEntity>>,
     dayTypes: Map<LocalDate, DayType>,
     regularized: Map<LocalDate, String>,
+    regularizedOn: Map<LocalDate, LocalDate?>,
     settings: Settings,
     onOpenDay: (LocalDate) -> Unit,
+    onSetType: (LocalDate, DayType) -> Unit,
 ) {
     val now by rememberNow()
     val today = now.toLocalDate()
@@ -81,7 +83,7 @@ fun HistoryScreen(
         Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        CalendarCard(today, ::summaryOf, onOpenDay)
+        CalendarCard(today, ::summaryOf, onOpenDay, onSetType)
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Range.entries.forEach { r ->
@@ -115,6 +117,9 @@ fun HistoryScreen(
             required = settings.rules.requiredInside,
         )
         UpcomingCard(summaries, today)
+        RegularizedCard(summaries.values.filter { it.isRegularized }.sortedByDescending { it.date }, regularizedOn) { text ->
+            shareText(context, "Regularized days", text)
+        }
     }
 
     if (sharing) {
@@ -172,7 +177,7 @@ private fun TargetsCard(week: Outlook, month: Outlook, required: Duration) {
 /** Planned holidays and leave, plus how much leave was taken this year. */
 @Composable
 private fun UpcomingCard(summaries: Map<LocalDate, DaySummary>, today: LocalDate) {
-    val upcoming = summaries.values.filter { it.date > today && it.dayOff }.sortedBy { it.date }
+    val upcoming = summaries.values.filter { it.date > today && (it.dayOff || it.type.isPartDay) }.sortedBy { it.date }
     val leaveThisYear = summaries.values.filter { it.type == DayType.LEAVE && it.date.year == today.year }
     val taken = leaveThisYear.count { it.date <= today }
     val planned = leaveThisYear.size - taken
@@ -185,7 +190,7 @@ private fun UpcomingCard(summaries: Map<LocalDate, DaySummary>, today: LocalDate
             )
             if (upcoming.isEmpty()) {
                 Text(
-                    "Nothing planned. On Today, tap the date to pick a future day and mark it Holiday or On leave.",
+                    "Nothing planned. Long-press a day on the calendar above to mark it Holiday, On leave, Half day or Short leave.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -365,5 +370,43 @@ private fun DayRow(s: DaySummary) {
             style = MaterialTheme.typography.bodySmall,
             color = if (s.lop) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+private val regularizedOnFormat = DateTimeFormatter.ofPattern("d MMM yyyy")
+
+/** Every regularized day with what happened, the note and when it was agreed, for HR if they ask. */
+@Composable
+private fun RegularizedCard(days: List<DaySummary>, regularizedOn: Map<LocalDate, LocalDate?>, onShare: (String) -> Unit) {
+    if (days.isEmpty()) return
+    fun line(s: DaySummary) = listOfNotNull(
+        s.date.format(dayRowFormat) + if (s.date.year != LocalDate.now().year) " ${s.date.year}" else "",
+        s.lopReasons.joinToString { it.shortLabel() },
+        s.regularized?.takeIf { it.isNotEmpty() }?.let { "\"$it\"" },
+        regularizedOn[s.date]?.let { "regularized on ${it.format(regularizedOnFormat)}" },
+    ).joinToString(" · ")
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Regularized (${days.size})", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                IconButton(onClick = { onShare("Regularized days\n" + days.joinToString("\n") { "• " + line(it) }) }) {
+                    Icon(Icons.Filled.Share, contentDescription = "Share regularized days")
+                }
+            }
+            days.forEach { s ->
+                Column {
+                    Row {
+                        Text(s.date.format(dayRowFormat), Modifier.weight(1f), fontWeight = FontWeight.Medium)
+                        regularizedOn[s.date]?.let {
+                            Text("on ${it.format(dayRowFormat)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Text(s.lopReasons.joinToString { it.describe(s) }, style = MaterialTheme.typography.bodySmall)
+                    s.regularized?.takeIf { it.isNotEmpty() }?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
     }
 }

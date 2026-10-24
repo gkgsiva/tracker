@@ -51,4 +51,22 @@ interface PunchDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDays(days: List<DayEntity>)
+
+    @Query("DELETE FROM punches WHERE epochDay = :epochDay")
+    suspend fun deletePunchesFor(epochDay: Long)
+
+    @Query("SELECT * FROM edits ORDER BY atMillis")
+    fun observeEdits(): Flow<List<EditEntity>>
+
+    @Query("SELECT * FROM edits ORDER BY atMillis")
+    suspend fun allEdits(): List<EditEntity>
+
+    @Insert
+    suspend fun insertEdit(edit: EditEntity)
+
+    @Insert
+    suspend fun insertEdits(edits: List<EditEntity>)
+
+    @Query("DELETE FROM edits")
+    suspend fun deleteAllEdits()
 }

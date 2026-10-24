@@ -7,8 +7,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
 import com.gkgsiva.tracker.data.AppDatabase
 import com.gkgsiva.tracker.data.DayEntity
+import com.gkgsiva.tracker.data.EditEntity
 import com.gkgsiva.tracker.data.PunchEntity
 import com.gkgsiva.tracker.domain.BreakPlan
+import com.gkgsiva.tracker.domain.DayShape
 import com.gkgsiva.tracker.domain.DaySummary
 import com.gkgsiva.tracker.domain.DayType
 import com.gkgsiva.tracker.domain.Settings
@@ -48,7 +50,38 @@ class TrackerViewModel(app: Application) : AndroidViewModel(app) {
         .map { days -> days.filter { it.regularized }.associate { LocalDate.ofEpochDay(it.epochDay) to it.note.orEmpty() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    /** Changes made to entries by hand, oldest first, by day. */
+    val edits: StateFlow<Map<LocalDate, List<EditEntity>>> = dao.observeEdits()
+        .map { all -> all.groupBy { it.date } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** Regularized days and when each was regularized (null for days from before 1.9). */
+    val regularizedOn: StateFlow<Map<LocalDate, LocalDate?>> = dao.observeDays()
+        .map { days -> days.filter { it.regularized }.associate { LocalDate.ofEpochDay(it.epochDay) to it.regularizedOn?.let(LocalDate::ofEpochDay) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     val settings: StateFlow<Settings> = SettingsStore.flow(app)
+
+    /** Runs a change to [date]'s entries and writes down what changed, with [reason] if given. */
+    private fun logged(date: LocalDate, reason: String? = null, block: suspend () -> Unit) = change {
+        db.withTransaction {
+            val before = DayShape.of(dao.punchesFor(date.toEpochDay()).map { it.toPunch() })
+            block()
+            val after = DayShape.of(dao.punchesFor(date.toEpochDay()).map { it.toPunch() })
+            val why = reason?.trim()?.takeIf { it.isNotEmpty() }
+            if (after != before || why != null) {
+                dao.insertEdit(EditEntity(epochDay = date.toEpochDay(), atMillis = System.currentTimeMillis(), change = after.describeChange(before) { it.formatClock() }, reason = why))
+            }
+        }
+    }
+
+    /** Replaces [date]'s entries with [shape] in one go. */
+    fun saveDay(date: LocalDate, shape: DayShape, reason: String?) = logged(date, reason) {
+        dao.deletePunchesFor(date.toEpochDay())
+        dao.insertAll(
+            shape.toPunches().map { PunchEntity(epochDay = date.toEpochDay(), secondOfDay = it.time.toSecondOfDay(), isIn = it.isIn, isLogout = it.isLogout) }
+        )
+    }
 
     /** Runs a change, then refreshes the widget and reminders. */
     private fun change(block: suspend () -> Unit) = viewModelScope.launch {
@@ -68,7 +101,13 @@ class TrackerViewModel(app: Application) : AndroidViewModel(app) {
     /** Marks an LOP day as regularized with the manager, or undoes it ([note] null). */
     fun setRegularized(date: LocalDate, currentType: DayType, note: String?) = change {
         val existing = dao.day(date.toEpochDay()) ?: DayEntity(date.toEpochDay(), currentType.name)
-        dao.upsertDay(existing.copy(regularized = note != null, note = note?.trim()?.takeIf { it.isNotEmpty() }))
+        dao.upsertDay(
+            existing.copy(
+                regularized = note != null,
+                note = note?.trim()?.takeIf { it.isNotEmpty() },
+                regularizedOn = if (note != null) LocalDate.now().toEpochDay() else null,
+            )
+        )
     }
 
     /** Deletes every entry and day setting. */
@@ -78,6 +117,7 @@ class TrackerViewModel(app: Application) : AndroidViewModel(app) {
         db.withTransaction {
             dao.deleteAllPunches()
             dao.deleteAllDays()
+            dao.deleteAllEdits()
         }
     }
 
@@ -113,7 +153,7 @@ class TrackerViewModel(app: Application) : AndroidViewModel(app) {
     /** The plan for the break [s] is on, if any. */
     fun breakPlan(s: DaySummary): BreakPlan? = BreakPlans.current(getApplication(), s)
 
-    fun add(date: LocalDate, time: LocalTime, isIn: Boolean, isLogout: Boolean) = change {
+    fun add(date: LocalDate, time: LocalTime, isIn: Boolean, isLogout: Boolean) = logged(date) {
         dao.insert(
             PunchEntity(
                 epochDay = date.toEpochDay(),
@@ -124,16 +164,16 @@ class TrackerViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    fun update(punch: PunchEntity, time: LocalTime, isIn: Boolean, isLogout: Boolean) = change {
+    fun update(punch: PunchEntity, time: LocalTime, isIn: Boolean, isLogout: Boolean) = logged(punch.date) {
         dao.update(punch.copy(secondOfDay = time.toSecondOfDay(), isIn = isIn, isLogout = !isIn && isLogout))
     }
 
     /** Turns the break you're on into the end of the day. */
-    fun convertToLogout(punch: PunchEntity) = change {
+    fun convertToLogout(punch: PunchEntity) = logged(punch.date) {
         dao.update(punch.copy(isLogout = true))
     }
 
-    fun delete(punch: PunchEntity) = change {
+    fun delete(punch: PunchEntity) = logged(punch.date) {
         dao.delete(punch)
     }
 

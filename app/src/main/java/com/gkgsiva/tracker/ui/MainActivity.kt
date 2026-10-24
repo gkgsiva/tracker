@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
                 val punchesByDay by vm.punchesByDay.collectAsStateWithLifecycle()
                 val dayTypes by vm.dayTypes.collectAsStateWithLifecycle()
                 val regularized by vm.regularized.collectAsStateWithLifecycle()
+                val regularizedOn by vm.regularizedOn.collectAsStateWithLifecycle()
                 var tab by rememberSaveable { mutableIntStateOf(0) }
                 // A day picked on the History calendar, for Today to open.
                 var openDay by remember { mutableStateOf<LocalDate?>(null) }
@@ -92,7 +93,11 @@ class MainActivity : ComponentActivity() {
                     Box(Modifier.fillMaxSize().padding(padding)) {
                         when (tab) {
                             0 -> TodayScreen(punchesByDay, dayTypes, regularized, settings, vm, openDay, onOpened = { openDay = null })
-                            1 -> HistoryScreen(punchesByDay, dayTypes, regularized, settings, onOpenDay = { openDay = it; tab = 0 })
+                            1 -> HistoryScreen(
+                                punchesByDay, dayTypes, regularized, regularizedOn, settings,
+                                onOpenDay = { openDay = it; tab = 0 },
+                                onSetType = vm::setDayType,
+                            )
                             else -> SettingsScreen(settings, vm)
                         }
                     }
