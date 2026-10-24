@@ -1,6 +1,7 @@
 package com.gkgsiva.tracker.system
 
 import android.content.Context
+import com.gkgsiva.tracker.domain.Gate
 import com.gkgsiva.tracker.domain.Rules
 import com.gkgsiva.tracker.domain.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +33,16 @@ object SettingsStore {
             .putBoolean("remindLeave", settings.remindLeave)
             .putBoolean("remindBreak", settings.remindBreak)
             .putBoolean("statusNotification", settings.statusNotification)
+            .apply {
+                val gate = settings.gate
+                if (gate == null) {
+                    remove("gateLat"); remove("gateLng"); remove("gateRadius")
+                } else {
+                    putLong("gateLat", gate.latitude.toRawBits())
+                    putLong("gateLng", gate.longitude.toRawBits())
+                    putInt("gateRadius", gate.radiusMeters)
+                }
+            }
             .apply()
         (flow(context) as MutableStateFlow).value = settings
     }
@@ -54,6 +65,13 @@ object SettingsStore {
             remindLeave = p.getBoolean("remindLeave", d.remindLeave),
             remindBreak = p.getBoolean("remindBreak", d.remindBreak),
             statusNotification = p.getBoolean("statusNotification", d.statusNotification),
+            gate = if (p.contains("gateLat") && p.contains("gateLng")) {
+                Gate(
+                    Double.fromBits(p.getLong("gateLat", 0)),
+                    Double.fromBits(p.getLong("gateLng", 0)),
+                    p.getInt("gateRadius", 100),
+                )
+            } else null,
         )
     }
 }

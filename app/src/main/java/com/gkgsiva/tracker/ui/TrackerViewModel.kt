@@ -1,5 +1,6 @@
 package com.gkgsiva.tracker.ui
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
@@ -9,10 +10,15 @@ import com.gkgsiva.tracker.data.AppDatabase
 import com.gkgsiva.tracker.data.DayEntity
 import com.gkgsiva.tracker.data.PunchEntity
 import com.gkgsiva.tracker.domain.DayType
+import com.gkgsiva.tracker.domain.Gate
 import com.gkgsiva.tracker.domain.Settings
 import com.gkgsiva.tracker.system.Backup
+import com.gkgsiva.tracker.system.GateMonitor
 import com.gkgsiva.tracker.system.SettingsStore
 import com.gkgsiva.tracker.system.Tracker
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -47,7 +53,30 @@ class TrackerViewModel(app: Application) : AndroidViewModel(app) {
         Tracker.onChanged(getApplication())
     }
 
-    fun updateSettings(settings: Settings) = change { SettingsStore.save(getApplication(), settings) }
+    fun updateSettings(settings: Settings) = change {
+        val gateChanged = settings.gate != SettingsStore.get(getApplication()).gate
+        SettingsStore.save(getApplication(), settings)
+        if (gateChanged) GateMonitor.register(getApplication())
+    }
+
+    /** Re-adds the gate geofence, e.g. after location permission was granted. */
+    fun refreshGate() = GateMonitor.register(getApplication())
+
+    /** Saves the phone's current location as the gate; needs fine location permission. */
+    @SuppressLint("MissingPermission")
+    fun setGateHere(radiusMeters: Int, onResult: (String) -> Unit) {
+        LocationServices.getFusedLocationProviderClient(getApplication<Application>())
+            .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
+            .addOnSuccessListener { location ->
+                if (location == null) {
+                    onResult("Couldn't get your location. Turn on location and try again.")
+                } else {
+                    updateSettings(settings.value.copy(gate = Gate(location.latitude, location.longitude, radiusMeters)))
+                    onResult("Gate saved (accurate to about ${location.accuracy.toInt()} m)")
+                }
+            }
+            .addOnFailureListener { onResult("Couldn't get your location: ${it.message}") }
+    }
 
     fun setDayType(date: LocalDate, type: DayType) = change {
         dao.upsertDay(DayEntity(date.toEpochDay(), type.name))

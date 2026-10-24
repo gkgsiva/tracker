@@ -41,11 +41,18 @@ While you're logged in, an ongoing notification counts down to the required hour
 and has Start break / End break / Log out buttons that work from the lock screen. A quick settings tile
 ("Office break") starts and ends breaks with one tap.
 
+**Gate auto-login** (optional, off until you set it up in Settings): stand at the office gate and save it as
+the gate, with a radius of 50–300 m (100 m by default). Walking in offers "Log in" (or "End break"), and
+walking out offers "Start break" or "Log out", each timed to when you crossed the gate. Nothing is recorded
+until you tap the notification. It needs precise location "Allow all the time"; Android watches the geofence
+itself, so the app still does no background work.
+
 There's also a home-screen widget (long-press the home screen → Widgets → Office Tracker) with a live counter
 and one-tap Log in / Start break / End break / Log out.
 
 Everything is stored locally on the phone in a Room (SQLite) database. Nothing runs in the background: the
-live counter only ticks while the app is open, and reminders are a few one-shot alarms.
+live counter only ticks while the app is open, reminders are a few one-shot alarms, and the gate is a
+system geofence.
 
 Default rules live in `app/src/main/java/com/gkgsiva/tracker/domain/Rules.kt`.
 

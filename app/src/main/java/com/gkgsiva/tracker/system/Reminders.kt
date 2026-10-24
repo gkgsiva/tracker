@@ -137,9 +137,10 @@ object Reminders {
         }
     }
 
-    /** Re-arms reminders after a reboot or app update, since alarms don't survive those. */
+    /** Re-arms reminders and the gate geofence after a reboot or app update, since neither survives those. */
     class BootReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            GateMonitor.register(context)
             goAsyncIo { Tracker.onChanged(context) }
         }
     }

@@ -35,9 +35,10 @@ object Tracker {
         )
     }
 
-    /** Records a login/break end (isIn), break start or logout right now. */
-    suspend fun punchNow(context: Context, isIn: Boolean, isLogout: Boolean = false) {
-        val now = LocalDateTime.now().withNano(0)
+    /** Records a login/break end (isIn), break start or logout, now or at [at] (e.g. a gate swipe). */
+    suspend fun punchNow(context: Context, isIn: Boolean, isLogout: Boolean = false, at: LocalDateTime = LocalDateTime.now()) {
+        val now = at.withNano(0)
+        GateMonitor.cancelPrompt(context)
         val dao = AppDatabase.get(context).punchDao()
         // Logging in on a weekly off day turns it into a working day.
         if (isIn && summary(context, now.toLocalDate(), now).type == DayType.WEEKLY_OFF) {
