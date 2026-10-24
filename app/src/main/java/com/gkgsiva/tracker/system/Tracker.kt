@@ -66,5 +66,6 @@ object Tracker {
         Reminders.reschedule(context)
         StatusNotification.update(context, summary(context, LocalDate.now()))
         BreakTileService.requestUpdate(context)
+        Backup.autoBackupIfDue(context)
     }
 }

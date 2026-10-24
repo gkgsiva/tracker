@@ -2,12 +2,17 @@ package com.gkgsiva.tracker.system
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.room.withTransaction
 import com.gkgsiva.tracker.data.AppDatabase
 import com.gkgsiva.tracker.data.DayEntity
 import com.gkgsiva.tracker.data.PunchEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -20,35 +25,86 @@ object Backup {
     private const val HEADER = "kind,date,time,event,dayType"
 
     suspend fun export(context: Context, uri: Uri): Int = withContext(Dispatchers.IO) {
+        context.contentResolver.openOutputStream(uri, "wt")!!.use { write(context, it) }
+    }
+
+    /** Replaces all data with the backup's contents. Throws with the line number on a bad file. */
+    suspend fun import(context: Context, uri: Uri): Int = withContext(Dispatchers.IO) {
+        context.contentResolver.openInputStream(uri)!!.use { restore(context, it) }
+    }
+
+    /** Copy kept inside the app just before Clear data, so it can be undone. */
+    private fun clearedCopy(context: Context) = File(context.filesDir, "before-clear.csv")
+
+    suspend fun saveBeforeClear(context: Context): Int = withContext(Dispatchers.IO) {
+        clearedCopy(context).outputStream().use { write(context, it) }
+    }
+
+    suspend fun undoClear(context: Context): Int = withContext(Dispatchers.IO) {
+        clearedCopy(context).inputStream().use { restore(context, it) }
+    }
+
+    private const val AUTO_PREFS = "backup"
+    private const val LAST_AUTO = "lastAuto"
+    private val AUTO_EVERY: Duration = Duration.ofDays(7)
+
+    /**
+     * Writes a dated backup into the folder chosen in Settings once a week. Called whenever data
+     * changes, so it needs no background job of its own. Failures (folder removed, permission
+     * revoked) are left for the next attempt.
+     */
+    suspend fun autoBackupIfDue(context: Context) = withContext(Dispatchers.IO) {
+        val folder = SettingsStore.get(context).backupFolder ?: return@withContext
+        val prefs = context.getSharedPreferences(AUTO_PREFS, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        if (now - prefs.getLong(LAST_AUTO, 0) < AUTO_EVERY.toMillis()) return@withContext
+        runCatching {
+            val tree = Uri.parse(folder)
+            val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+            val file = DocumentsContract.createDocument(
+                context.contentResolver, parent, "text/csv", "office-tracker-${LocalDate.now()}.csv",
+            ) ?: return@runCatching
+            context.contentResolver.openOutputStream(file, "wt")!!.use { write(context, it) }
+            prefs.edit().putLong(LAST_AUTO, now).apply()
+        }
+    }
+
+    /** Makes the next [autoBackupIfDue] write right away, e.g. after choosing a new folder. */
+    fun resetAutoBackup(context: Context) {
+        context.getSharedPreferences(AUTO_PREFS, Context.MODE_PRIVATE).edit().remove(LAST_AUTO).apply()
+    }
+
+    /** When the last automatic backup was written, in epoch millis; 0 if never. */
+    fun lastAutoBackup(context: Context): Long =
+        context.getSharedPreferences(AUTO_PREFS, Context.MODE_PRIVATE).getLong(LAST_AUTO, 0)
+
+    private suspend fun write(context: Context, out: OutputStream): Int {
         val dao = AppDatabase.get(context).punchDao()
         val punches = dao.allPunches()
         val days = dao.allDays()
-        val lines = buildList {
-            add(HEADER)
+        out.bufferedWriter().apply {
+            appendLine(HEADER)
             punches.forEach { p ->
                 val event = when {
                     p.isIn -> "IN"
                     p.isLogout -> "LOGOUT"
                     else -> "BREAK"
                 }
-                add("punch,${p.date},${p.time},$event,")
+                appendLine("punch,${p.date},${p.time},$event,")
             }
             days.forEach { d ->
                 val regularized = if (d.regularized) ",REGULARIZED,${d.note.orEmpty().replace('\n', ' ')}" else ""
-                add("day,${LocalDate.ofEpochDay(d.epochDay)},,,${d.type}$regularized")
+                appendLine("day,${LocalDate.ofEpochDay(d.epochDay)},,,${d.type}$regularized")
             }
+            flush()
         }
-        context.contentResolver.openOutputStream(uri, "wt")!!.bufferedWriter().use { w ->
-            lines.forEach { w.appendLine(it) }
-        }
-        punches.size + days.size
+        return punches.size + days.size
     }
 
-    /** Replaces all data with the backup's contents. Throws with the line number on a bad file. */
-    suspend fun import(context: Context, uri: Uri): Int = withContext(Dispatchers.IO) {
+    private suspend fun restore(context: Context, input: InputStream): Int {
         val punches = mutableListOf<PunchEntity>()
         val days = mutableListOf<DayEntity>()
-        context.contentResolver.openInputStream(uri)!!.bufferedReader().useLines { lines ->
+        input.bufferedReader().useLines { lines ->
             lines.forEachIndexed { i, raw ->
                 val line = raw.trim()
                 if (line.isEmpty() || line == HEADER) return@forEachIndexed
@@ -84,6 +140,6 @@ object Backup {
             dao.insertDays(days)
         }
         Tracker.onChanged(context)
-        punches.size + days.size
+        return punches.size + days.size
     }
 }

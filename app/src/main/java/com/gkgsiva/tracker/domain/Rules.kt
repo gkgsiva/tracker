@@ -39,6 +39,10 @@ data class Settings(
     /** Where you swipe in; when set, passing it prompts a login/logout. */
     val gate: Gate? = null,
     val theme: ThemeMode = ThemeMode.SYSTEM,
+    /** Folder (a document tree URI) for the weekly automatic backup; off when null. */
+    val backupFolder: String? = null,
+    /** Notify on the 1st with a summary of the month that just ended. */
+    val monthSummary: Boolean = true,
 )
 
 enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK("Dark") }

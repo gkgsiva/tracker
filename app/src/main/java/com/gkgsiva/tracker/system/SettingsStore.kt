@@ -36,6 +36,8 @@ object SettingsStore {
             .putBoolean("remindBreak", settings.remindBreak)
             .putBoolean("statusNotification", settings.statusNotification)
             .putString("theme", settings.theme.name)
+            .putString("backupFolder", settings.backupFolder)
+            .putBoolean("monthSummary", settings.monthSummary)
             .apply {
                 val gate = settings.gate
                 if (gate == null) {
@@ -70,6 +72,8 @@ object SettingsStore {
             remindBreak = p.getBoolean("remindBreak", d.remindBreak),
             statusNotification = p.getBoolean("statusNotification", d.statusNotification),
             theme = ThemeMode.entries.firstOrNull { it.name == p.getString("theme", null) } ?: d.theme,
+            backupFolder = p.getString("backupFolder", null),
+            monthSummary = p.getBoolean("monthSummary", d.monthSummary),
             gate = if (p.contains("gateLat") && p.contains("gateLng")) {
                 Gate(
                     Double.fromBits(p.getLong("gateLat", 0)),
