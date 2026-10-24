@@ -1,0 +1,43 @@
+name: Tag release
+
+# Tags each push to main as v<versionName> (from app/build.gradle.kts) if that tag doesn't exist yet.
+# Run it by hand to tag an older commit, e.g. tag=v1.0 sha=568ddc5.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag name, e.g. v1.0
+        required: true
+      sha:
+        description: Commit to tag
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create tag
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+            SHA="${{ inputs.sha }}"
+          else
+            TAG="v$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)"
+            SHA="$GITHUB_SHA"
+          fi
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG already exists"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$SHA" -m "Office Tracker $TAG"
+          git push origin "$TAG"

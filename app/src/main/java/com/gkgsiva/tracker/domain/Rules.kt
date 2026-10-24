@@ -22,4 +22,11 @@ data class Settings(
     val remindLeave: Boolean = true,
     /** Notify when the break allowance runs out during a break. */
     val remindBreak: Boolean = true,
+    /** Ongoing notification with a countdown while logged in. */
+    val statusNotification: Boolean = true,
+    /** Where you swipe in; when set, passing it prompts a login/logout. */
+    val gate: Gate? = null,
 )
+
+/** A circle around the office gate. */
+data class Gate(val latitude: Double, val longitude: Double, val radiusMeters: Int = 100)

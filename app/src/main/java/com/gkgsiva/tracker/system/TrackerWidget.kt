@@ -14,7 +14,10 @@ import com.gkgsiva.tracker.domain.DayStatus
 import com.gkgsiva.tracker.ui.MainActivity
 import com.gkgsiva.tracker.ui.formatClock
 import com.gkgsiva.tracker.ui.formatHm
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
 
 /**
  * Home-screen widget with the day's status, a live inside-time counter (a system Chronometer,
@@ -30,7 +33,13 @@ class TrackerWidget : AppWidgetProvider() {
         if (intent.action == ACTION_PUNCH) {
             val isIn = intent.getBooleanExtra(EXTRA_IN, true)
             val isLogout = intent.getBooleanExtra(EXTRA_LOGOUT, false)
-            goAsyncIo { Tracker.punchNow(context, isIn, isLogout) }
+            val atMillis = intent.getLongExtra(EXTRA_AT, -1L)
+            val at = if (atMillis > 0) {
+                LocalDateTime.ofInstant(Instant.ofEpochMilli(atMillis), ZoneId.systemDefault())
+            } else {
+                LocalDateTime.now()
+            }
+            goAsyncIo { Tracker.punchNow(context, isIn, isLogout, at) }
         } else {
             super.onReceive(context, intent)
         }
@@ -40,6 +49,7 @@ class TrackerWidget : AppWidgetProvider() {
         private const val ACTION_PUNCH = "com.gkgsiva.tracker.PUNCH"
         private const val EXTRA_IN = "isIn"
         private const val EXTRA_LOGOUT = "isLogout"
+        private const val EXTRA_AT = "atMillis"
 
         suspend fun updateAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
@@ -95,7 +105,8 @@ class TrackerWidget : AppWidgetProvider() {
             return views
         }
 
-        private enum class Action(val label: String, val isIn: Boolean, val isLogout: Boolean) {
+        /** A punch the widget, status notification and quick settings tile can trigger. */
+        enum class Action(val label: String, val isIn: Boolean, val isLogout: Boolean) {
             LOGIN("Log in", true, false),
             BREAK_START("Start break", false, false),
             BREAK_END("End break", true, false),
@@ -109,16 +120,22 @@ class TrackerWidget : AppWidgetProvider() {
             }
             views.setViewVisibility(viewId, View.VISIBLE)
             views.setTextViewText(viewId, action.label)
+            views.setOnClickPendingIntent(viewId, punchIntent(context, action))
+        }
+
+        /**
+         * Broadcast that records [action] without opening the app: right now, or at [atMillis]
+         * (epoch millis) when given, e.g. the moment you passed the gate.
+         */
+        fun punchIntent(context: Context, action: Action, atMillis: Long? = null): PendingIntent {
             val intent = Intent(context, TrackerWidget::class.java)
                 .setAction(ACTION_PUNCH)
                 .putExtra(EXTRA_IN, action.isIn)
                 .putExtra(EXTRA_LOGOUT, action.isLogout)
-            views.setOnClickPendingIntent(
-                viewId,
-                PendingIntent.getBroadcast(
-                    context, 100 + action.ordinal, intent,
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                ),
+            if (atMillis != null) intent.putExtra(EXTRA_AT, atMillis)
+            return PendingIntent.getBroadcast(
+                context, (if (atMillis != null) 200 else 100) + action.ordinal, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
         }
     }
