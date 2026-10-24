@@ -35,7 +35,7 @@ holiday and leave days separately. The share icon sends a text report for a day,
 Tap the date on Today to jump to any day, including future dates, so you can plan leave and holidays
 ahead. History lists what's planned and how much leave you've taken this year.
 
-**Settings** lets you change the rules (core login-by and leave-after, hours inside, official start and end), pick weekly
+**Settings** lets you change the rules (core login-by and leave-after, hours inside, official start and end), choose light, dark or system theme, pick weekly
 off days (Saturday and Sunday by default), turn reminders on or off (login reminder 15 minutes before the
 deadline, "you can leave now", and "break allowance used"), export or import a CSV backup, and clear all data.
 
