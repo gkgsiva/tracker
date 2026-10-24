@@ -100,6 +100,29 @@ class DayCalculatorTest {
     }
 
     @Test
+    fun badEntriesAreFlagged() {
+        val punches = listOf(outAt(8, 0), inAt(8, 30), inAt(9, 0), outAt(12, 0), outAt(12, 5), inAt(12, 30), logoutAt(17, 30))
+        val s = DayCalculator.summarize(day, punches, now = null)
+        assertEquals(
+            listOf(
+                EntryIssue(EntryIssueKind.OUT_BEFORE_LOGIN, t(8, 0)),
+                EntryIssue(EntryIssueKind.DOUBLE_IN, t(9, 0)),
+                EntryIssue(EntryIssueKind.DOUBLE_OUT, t(12, 5)),
+            ),
+            s.issues,
+        )
+        assertEquals(Duration.ofMinutes(30), s.breaks)
+    }
+
+    @Test
+    fun pastDayEndingOnABreakIsFlagged() {
+        val s = DayCalculator.summarize(day, listOf(inAt(8, 30), outAt(17, 40)), now = null)
+        assertEquals(listOf(EntryIssue(EntryIssueKind.OPEN_BREAK, t(17, 40))), s.issues)
+        val ok = DayCalculator.summarize(day, listOf(inAt(8, 30), logoutAt(17, 40)), now = null)
+        assertTrue(ok.issues.isEmpty())
+    }
+
+    @Test
     fun logoutEndsTheDay() {
         val punches = listOf(inAt(8, 0), outAt(12, 0), inAt(12, 30), logoutAt(17, 0))
         val s = DayCalculator.summarize(day, punches, now = t(18, 0))

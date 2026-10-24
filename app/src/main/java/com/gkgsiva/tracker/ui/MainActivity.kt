@@ -25,12 +25,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gkgsiva.tracker.ui.theme.TrackerTheme
+import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
     private val vm: TrackerViewModel by viewModels()
@@ -46,6 +49,8 @@ class MainActivity : ComponentActivity() {
                 val dayTypes by vm.dayTypes.collectAsStateWithLifecycle()
                 val regularized by vm.regularized.collectAsStateWithLifecycle()
                 var tab by rememberSaveable { mutableIntStateOf(0) }
+                // A day picked on the History calendar, for Today to open.
+                var openDay by remember { mutableStateOf<LocalDate?>(null) }
 
                 // Reminders are on by default, so ask for notification permission once.
                 val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -87,8 +92,8 @@ class MainActivity : ComponentActivity() {
                 ) { padding ->
                     Box(Modifier.fillMaxSize().padding(padding)) {
                         when (tab) {
-                            0 -> TodayScreen(punchesByDay, dayTypes, regularized, settings, vm)
-                            1 -> HistoryScreen(punchesByDay, dayTypes, regularized, settings)
+                            0 -> TodayScreen(punchesByDay, dayTypes, regularized, settings, vm, openDay, onOpened = { openDay = null })
+                            1 -> HistoryScreen(punchesByDay, dayTypes, regularized, settings, onOpenDay = { openDay = it; tab = 0 })
                             else -> SettingsScreen(settings, vm)
                         }
                     }

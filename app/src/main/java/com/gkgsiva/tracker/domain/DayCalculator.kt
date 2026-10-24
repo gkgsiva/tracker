@@ -38,6 +38,11 @@ enum class DayType(val label: String) {
     }
 }
 
+/** Entries that don't make sense together; the calculation skips them, but they should be fixed. */
+enum class EntryIssueKind { OUT_BEFORE_LOGIN, DOUBLE_IN, DOUBLE_OUT, OPEN_BREAK }
+
+data class EntryIssue(val kind: EntryIssueKind, val time: LocalTime)
+
 /** Rules whose breach makes the day loss of pay, regardless of hours worked. */
 enum class LopReason { LATE_LOGIN, EARLY_EXIT, UNDER_8H, MISSING_CHECKOUT }
 
@@ -62,6 +67,7 @@ data class DaySummary(
     val type: DayType = DayType.OFFICE,
     /** Set when the manager regularized this day's LOP: the note, or "" without one. */
     val regularized: String? = null,
+    val issues: List<EntryIssue> = emptyList(),
 ) {
     val wfh: Boolean get() = type == DayType.WFH
     val dayOff: Boolean get() = type.isDayOff
@@ -123,9 +129,13 @@ object DayCalculator {
             type == DayType.WFH -> wfhPunches(punches)
             else -> punches.sortedBy { it.time }
         }
+        val issues = mutableListOf<EntryIssue>()
         for (p in effective) {
             if (p.isIn) {
-                if (inSince != null) continue
+                if (inSince != null) {
+                    issues += EntryIssue(EntryIssueKind.DOUBLE_IN, p.time)
+                    continue
+                }
                 if (firstIn == null) {
                     firstIn = p.time
                 } else if (outSince != null) {
@@ -135,13 +145,21 @@ object DayCalculator {
                 inSince = p.time
                 outSince = null
             } else {
-                if (inSince == null) continue
+                if (inSince == null) {
+                    issues += EntryIssue(if (firstIn == null) EntryIssueKind.OUT_BEFORE_LOGIN else EntryIssueKind.DOUBLE_OUT, p.time)
+                    continue
+                }
                 inside += Duration.between(inSince, p.time)
                 lastOut = p.time
                 inSince = null
                 outSince = p.time
                 loggedOut = p.isLogout
             }
+        }
+
+        // On a past day a final break start that never ended is most likely a logout entered as a break.
+        if (now == null && type == DayType.OFFICE && outSince != null && !loggedOut && lastOut != null) {
+            issues += EntryIssue(EntryIssueKind.OPEN_BREAK, lastOut)
         }
 
         var returnBy: LocalTime? = null
@@ -186,6 +204,7 @@ object DayCalculator {
             rules = rules,
             type = type,
             regularized = regularized,
+            issues = issues,
         )
     }
 

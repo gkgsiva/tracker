@@ -64,6 +64,7 @@ fun HistoryScreen(
     dayTypes: Map<LocalDate, DayType>,
     regularized: Map<LocalDate, String>,
     settings: Settings,
+    onOpenDay: (LocalDate) -> Unit,
 ) {
     val now by rememberNow()
     val today = now.toLocalDate()
@@ -80,6 +81,8 @@ fun HistoryScreen(
         Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        CalendarCard(today, ::summaryOf, onOpenDay)
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Range.entries.forEach { r ->
                 FilterChip(selected = r == selected, onClick = { range = r.ordinal }, label = { Text(r.label) })
