@@ -23,6 +23,8 @@ import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.format.TextStyle
+import java.util.Locale
 
 /**
  * Login, can-leave and break reminders. Uses a few one-shot alarms that are recomputed whenever
@@ -94,7 +96,11 @@ object Reminders {
         val rules = s.rules
         when (kind) {
             LOGIN -> if (s.status == DayStatus.NOT_STARTED) {
-                notify(context, kind, "Time to log in", "Log in before ${rules.arriveBy.formatClock()} to avoid LOP.")
+                // Mention a recent day left without a logout, so it gets filled in while it's fresh.
+                val missed = (1L..7L).map { now.toLocalDate().minusDays(it) }
+                    .firstOrNull { Tracker.summary(context, it, now).status == DayStatus.MISSING_CHECKOUT }
+                val extra = missed?.let { " No logout on ${it.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())}: open the app to add it." }.orEmpty()
+                notify(context, kind, "Time to log in", "Log in before ${rules.arriveBy.formatClock()} to avoid LOP.$extra")
             }
             LEAVE -> if (s.status == DayStatus.INSIDE && s.targetMet && now.toLocalTime() >= rules.leaveAfter) {
                 notify(context, kind, "You can leave now", "${s.inside.formatHm()} inside today. Remember to log out.")

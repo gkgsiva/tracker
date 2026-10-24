@@ -35,6 +35,11 @@ holiday and leave days separately. The share icon sends a text report for a day,
 Tap the date on Today to jump to any day, including future dates, so you can plan leave and holidays
 ahead. History lists what's planned and how much leave you've taken this year.
 
+**History** opens with a month calendar: each day is colored by how it went (8h met, LOP, regularized,
+holiday or leave), and tapping a day opens it. Entries that don't fit together (a check-out before the
+first login, two logins in a row, a past day that ends on a break) are flagged on the day with a fix, and
+if a recent day has no logout, Today (and the morning login reminder) asks for the time you left.
+
 **Settings** lets you change the rules (core login-by and leave-after, hours inside, official start and end), choose light, dark or system theme, pick weekly
 off days (Saturday and Sunday by default), turn reminders on or off (login reminder 15 minutes before the
 deadline, "you can leave now", and "break allowance used"), export or import a CSV backup, and clear all data.

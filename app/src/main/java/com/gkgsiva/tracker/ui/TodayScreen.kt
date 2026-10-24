@@ -46,6 +46,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,6 +66,8 @@ import com.gkgsiva.tracker.data.PunchEntity
 import com.gkgsiva.tracker.domain.DayStatus
 import com.gkgsiva.tracker.domain.DaySummary
 import com.gkgsiva.tracker.domain.DayType
+import com.gkgsiva.tracker.domain.EntryIssue
+import com.gkgsiva.tracker.domain.EntryIssueKind
 import com.gkgsiva.tracker.domain.Settings
 import java.time.Instant
 import java.time.LocalDate
@@ -102,10 +105,18 @@ fun TodayScreen(
     regularized: Map<LocalDate, String>,
     settings: Settings,
     vm: TrackerViewModel,
+    openDay: LocalDate? = null,
+    onOpened: () -> Unit = {},
 ) {
     val now by rememberNow()
     val today = now.toLocalDate()
-    var selectedEpochDay by rememberSaveable { mutableStateOf(today.toEpochDay()) }
+    var selectedEpochDay by rememberSaveable { mutableStateOf(openDay?.toEpochDay() ?: today.toEpochDay()) }
+    LaunchedEffect(openDay) {
+        if (openDay != null) {
+            selectedEpochDay = openDay.toEpochDay()
+            onOpened()
+        }
+    }
     val date = LocalDate.ofEpochDay(selectedEpochDay)
     val isToday = date == today
     val punches = punchesByDay[date].orEmpty().sortedBy { it.secondOfDay }
@@ -155,7 +166,27 @@ fun TodayScreen(
             }
         }
 
+        // Forgot to log out on a recent working day: offer to fill it in.
+        if (isToday) {
+            val missed = (1L..7L).map { today.minusDays(it) }.firstOrNull { d ->
+                summarizeDay(d, punchesByDay[d].orEmpty(), now, dayTypes[d], settings, regularized[d]).status == DayStatus.MISSING_CHECKOUT
+            }
+            if (missed != null) MissedLogoutCard(missed.format(shortDateFormat)) {
+                selectedEpochDay = missed.toEpochDay()
+                adding = true
+            }
+        }
+
         StatusCard(summary, live = isToday, future = isFuture)
+
+        if (!isFuture) IssuesCard(summary.issues) { issue ->
+            val p = punches.firstOrNull { it.time == issue.time }
+            when {
+                p == null -> Unit
+                issue.kind == EntryIssueKind.OPEN_BREAK -> vm.convertToLogout(p)
+                else -> editing = p
+            }
+        }
 
         if (isToday && type == DayType.WEEKLY_OFF) {
             OutlinedButton(onClick = { vm.punchNow(isIn = true) }, modifier = Modifier.fillMaxWidth()) {
@@ -238,7 +269,11 @@ fun TodayScreen(
         val last = punches.lastOrNull()
         PunchDialog(
             title = "Add entry",
-            initialTime = if (isToday) now.toLocalTime() else rules.arriveBy,
+            initialTime = when {
+                isToday -> now.toLocalTime()
+                last?.isIn == true -> rules.officeEnd
+                else -> rules.arriveBy
+            },
             initialKind = when {
                 last == null || !last.isIn -> EntryKind.IN
                 isToday && !wfh -> EntryKind.BREAK
@@ -334,6 +369,47 @@ private fun ChoiceChip(text: String, selected: Boolean, onClick: () -> Unit, mod
             )
         },
     )
+}
+
+@Composable
+private fun MissedLogoutCard(day: String, onFix: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("No logout on $day", fontWeight = FontWeight.SemiBold)
+                Text("Add the time you left so the day counts.", style = MaterialTheme.typography.bodySmall)
+            }
+            TextButton(onClick = onFix) { Text("Add logout") }
+        }
+    }
+}
+
+/** Entries that don't fit together, each with a one-tap fix or a jump to editing it. */
+@Composable
+private fun IssuesCard(issues: List<EntryIssue>, onFix: (EntryIssue) -> Unit) {
+    if (issues.isEmpty()) return
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Check these entries", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+            issues.forEach { issue ->
+                val t = issue.time.formatClock()
+                val (text, fix) = when (issue.kind) {
+                    EntryIssueKind.OPEN_BREAK -> "Break started at $t never ended. Was it your logout?" to "Mark as logout"
+                    EntryIssueKind.OUT_BEFORE_LOGIN -> "Check-out at $t comes before the first login" to "Edit"
+                    EntryIssueKind.DOUBLE_IN -> "Login at $t follows another login with no break between" to "Edit"
+                    EntryIssueKind.DOUBLE_OUT -> "Check-out at $t follows another check-out" to "Edit"
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = { onFix(issue) }) { Text(fix) }
+                }
+            }
+            Text("These entries are skipped until fixed.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
 
 /** The day's type as one compact row; tapping it opens the choices with what each means. */
