@@ -325,7 +325,7 @@ to be back (and your planned break length). It shows on the lock screen, even on
 notifications there, so you can check the time left without unlocking. Its **Start break**, **End
 break** and **Log out** buttons work from the lock screen without opening the app.
 
-![Status notification](screenshots/notification-status.png)
+![Status notification during a 15-minute planned break](screenshots/notification-status.png)
 
 **Reminders** (each can be turned off in Settings):
 
@@ -336,8 +336,6 @@ break** and **Log out** buttons work from the lock screen without opening the ap
 | Long break | 5 minutes before your break allowance runs out, and again when it does |
 | Planned break ending | A pop-up alert with an **End break** button, 2 minutes (adjustable) before the break length you picked runs out, and again when it does |
 | Month summary | On the 1st at 10:00 AM: for the month just ended, days that met 8h, LOP days, regularized days and total hours |
-
-![Planned break alert](screenshots/notification-break-ending.png)
 
 The reminders are a few one-off alarms. The app does no other work in the background, so it doesn't
 drain the battery.
