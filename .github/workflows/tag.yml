@@ -1,7 +1,8 @@
-name: Tag release
+name: Release
 
-# Tags each push to main as v<versionName> (from app/build.gradle.kts) if that tag doesn't exist yet.
-# Run it by hand to tag an older commit, e.g. tag=v1.0 sha=568ddc5.
+# Each push to main that brings a new versionName (from app/build.gradle.kts) tags it v<versionName>
+# and publishes a GitHub Release with the APK as office-tracker-<version>.apk.
+# Run it by hand to (re)publish an older version, e.g. tag=v1.0 sha=568ddc5.
 on:
   push:
     branches: [main]
@@ -11,20 +12,23 @@ on:
         description: Tag name, e.g. v1.0
         required: true
       sha:
-        description: Commit to tag
-        required: true
+        description: Commit to tag, if the tag doesn't exist yet
+        required: false
 
 permissions:
   contents: write
 
 jobs:
-  tag:
+  release:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Create tag
+      - name: Pick version
+        id: pick
         run: |
           if [ -n "${{ inputs.tag }}" ]; then
             TAG="${{ inputs.tag }}"
@@ -32,12 +36,39 @@ jobs:
           else
             TAG="v$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)"
             SHA="$GITHUB_SHA"
+            if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+              echo "$TAG already released"
+              exit 0
+            fi
           fi
           if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            echo "$TAG already exists"
-            exit 0
+            SHA="$(git rev-list -n 1 "$TAG")"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" "$SHA" -m "Office Tracker $TAG"
+            git push origin "$TAG"
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" "$SHA" -m "Office Tracker $TAG"
-          git push origin "$TAG"
+          git checkout -q "$SHA"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - if: steps.pick.outputs.tag
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - if: steps.pick.outputs.tag
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build APK
+        if: steps.pick.outputs.tag
+        run: ./gradlew assembleDebug
+      - name: Publish release
+        if: steps.pick.outputs.tag
+        run: |
+          TAG="${{ steps.pick.outputs.tag }}"
+          APK="office-tracker-${{ steps.pick.outputs.version }}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$APK"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag \
+            --title "Office Tracker ${{ steps.pick.outputs.version }}" \
+            --notes "Tap $APK below on your phone to download and install it."
+          gh release upload "$TAG" "$APK" --clobber
