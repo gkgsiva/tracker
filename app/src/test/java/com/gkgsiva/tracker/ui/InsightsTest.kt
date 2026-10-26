@@ -24,8 +24,8 @@ class InsightsTest {
         assertEquals(1, o.daysMet)
         assertEquals(0, o.daysShort)
         assertEquals(2, o.daysLeft)
-        assertEquals("2 working days left · 8h each", o.paceText())
-        assertEquals("1 of 1 day met 8h", o.metText())
+        assertEquals("2 working days left · 8h work, 9h in office each", o.paceText())
+        assertEquals("1 of 1 day met 8h work, 9h in office", o.metText())
     }
     @Test fun forecastMessages() {
         val d = LocalDate.of(2026, 10, 21)

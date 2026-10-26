@@ -41,13 +41,16 @@ fun Duration.hours(): Float = seconds / 3600f
 fun LopReason.shortLabel(): String = when (this) {
     LopReason.LATE_LOGIN -> "late login"
     LopReason.EARLY_EXIT -> "left early"
-    LopReason.UNDER_8H -> "short hours"
+    LopReason.SHORT_WORK -> "short work hours"
+    LopReason.SHORT_PRESENT -> "short office time"
     LopReason.MISSING_CHECKOUT -> "no logout"
 }
 
+/** Which rule was missed and by how much. */
 fun LopReason.describe(s: DaySummary): String = when (this) {
     LopReason.LATE_LOGIN -> "Logged in at ${s.firstIn?.formatClock()}, after ${s.rules.arriveBy.formatClock()}"
-    LopReason.EARLY_EXIT -> "Left at ${s.lastOut?.formatClock()}, before ${s.rules.leaveAfter.formatClock()}"
-    LopReason.UNDER_8H -> "Only ${s.inside.formatHm()} inside, ${s.rules.requiredInside.formatShort()} required"
+    LopReason.EARLY_EXIT -> "Logged out at ${s.lastOut?.formatClock()}, before ${s.rules.leaveAfter.formatClock()}"
+    LopReason.SHORT_WORK -> "Worked ${s.inside.formatHm()} excluding breaks, ${s.rules.requiredInside.formatShort()} required"
+    LopReason.SHORT_PRESENT -> "In office ${s.present.formatHm()} including breaks, ${s.rules.requiredPresent.formatShort()} required"
     LopReason.MISSING_CHECKOUT -> "No logout recorded"
 }

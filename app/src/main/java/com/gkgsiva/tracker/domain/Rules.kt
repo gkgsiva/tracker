@@ -5,48 +5,53 @@ import java.time.Duration
 import java.time.LocalTime
 
 /**
- * Office timing policy. [arriveBy] and [leaveAfter] are the core hours (breaking either is LOP);
- * [officeStart] to [officeEnd] are the official hours, which set how much break you get.
+ * Office timing policy. Breaking any one of these makes the day LOP:
+ * - log in by [arriveBy] and log out after [leaveAfter] (the core hours),
+ * - [requiredInside] of work, breaks not counted,
+ * - [requiredPresent] in the office from login to logout, breaks counted.
  */
 data class Rules(
     val arriveBy: LocalTime = LocalTime.of(9, 0),
     val leaveAfter: LocalTime = LocalTime.of(17, 0),
+    /** Work time needed, breaks excluded. */
     val requiredInside: Duration = Duration.ofHours(8),
-    val officeStart: LocalTime = LocalTime.of(8, 30),
-    val officeEnd: LocalTime = LocalTime.of(17, 30),
-    /** Hours needed on a half day, at any time of day. */
+    /** Time needed from login to logout, breaks included. */
+    val requiredPresent: Duration = Duration.ofHours(9),
+    /** Work time needed on a half day, at any time of day. */
     val halfDayHours: Duration = Duration.ofHours(4),
-    /** Time off on a short-leave day: that much less inside, and core hours eased by it at both ends. */
+    /** Time off on a short-leave day: that much less of both, and core hours eased by it at both ends. */
     val shortLeave: Duration = Duration.ofHours(2),
-    /** When set, the break allowance regardless of login time (half days and short leave). */
-    val fixedBreak: Duration? = null,
 ) {
     /**
-     * Break you can take and still leave by [officeEnd]: the time from login (or [officeStart]
-     * before logging in) to [officeEnd], minus the required hours. Logging in at 8:30 gives 1h,
-     * earlier gives more, later gives less. Going over isn't LOP; you just stay later.
+     * Break you can take and still leave at the earliest moment the rules allow: the later of
+     * login + [requiredPresent] and [leaveAfter], minus [requiredInside]. With the defaults that's 1h;
+     * logging in before 8:00 gives more. Going over isn't LOP by itself; you just stay later.
      */
-    fun breakAllowance(firstIn: LocalTime?): Duration = fixedBreak
-        ?: (Duration.between(firstIn ?: officeStart, officeEnd) - requiredInside).coerceAtLeast(Duration.ZERO)
+    fun breakAllowance(firstIn: LocalTime?): Duration {
+        val span = if (firstIn == null) requiredPresent else maxOf(requiredPresent, Duration.between(firstIn, leaveAfter))
+        return (span - requiredInside).coerceAtLeast(Duration.ZERO)
+    }
 
     /**
-     * The rules a day of [type] is held to. A half day needs [halfDayHours] with no core hours; a
-     * short-leave day needs [shortLeave] less, may start that much after [arriveBy] and end that
-     * much before [leaveAfter]. Both keep the usual break allowance from an on-time login.
+     * The rules a day of [type] is held to. A half day needs [halfDayHours] of work with no core
+     * hours; a short-leave day needs [shortLeave] less of both, may start that much after
+     * [arriveBy] and end that much before [leaveAfter]. Working from home has no office time, so
+     * only the work hours count.
      */
     fun forType(type: DayType): Rules = when (type) {
         DayType.HALF_DAY -> copy(
             requiredInside = halfDayHours,
+            requiredPresent = halfDayHours,
             arriveBy = LocalTime.MAX,
             leaveAfter = LocalTime.MIN,
-            fixedBreak = breakAllowance(null),
         )
         DayType.SHORT_LEAVE -> copy(
             requiredInside = (requiredInside - shortLeave).coerceAtLeast(Duration.ZERO),
+            requiredPresent = (requiredPresent - shortLeave).coerceAtLeast(Duration.ZERO),
             arriveBy = arriveBy.plus(shortLeave),
             leaveAfter = leaveAfter.minus(shortLeave),
-            fixedBreak = breakAllowance(null),
         )
+        DayType.WFH -> copy(requiredPresent = requiredInside)
         else -> this
     }
 }

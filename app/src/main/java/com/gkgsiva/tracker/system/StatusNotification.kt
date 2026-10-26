@@ -19,6 +19,8 @@ import com.gkgsiva.tracker.ui.MainActivity
 import com.gkgsiva.tracker.ui.formatClock
 import com.gkgsiva.tracker.ui.formatHm
 import com.gkgsiva.tracker.ui.formatShort
+import java.time.Duration
+import java.time.LocalTime
 
 /**
  * Ongoing notification while the day is running. Its timer is drawn by the system (a chronometer
@@ -51,7 +53,6 @@ object StatusNotification {
             }
         )
         val now = System.currentTimeMillis()
-        val rules = s.rules
         val builder = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
@@ -68,13 +69,14 @@ object StatusNotification {
         val breakText = "Break ${s.breaks.formatHm()} of ${s.breakAllowance.formatShort()}"
         if (s.status == DayStatus.INSIDE) {
             val title = if (s.wfh) "Working from home" else "Inside office"
-            if (s.targetMet) {
-                builder.setContentTitle("$title · ${rules.requiredInside.formatShort()} done")
+            val untilLeave = s.expectedLeave?.let { Duration.between(LocalTime.now(), it) } ?: Duration.ZERO
+            if (!untilLeave.isPositive) {
+                builder.setContentTitle("$title · you can leave")
                     .setWhen(now - s.inside.toMillis())
             } else {
-                // Counts down to the moment the required hours are reached.
-                builder.setContentTitle("$title · ${s.remaining.formatHm()} to go")
-                    .setWhen(now + s.remaining.toMillis())
+                // Counts down to the moment every rule is met: work hours, office hours and leave-after time.
+                builder.setContentTitle("$title · ${untilLeave.formatHm()} to go")
+                    .setWhen(now + untilLeave.toMillis())
                     .setChronometerCountDown(true)
             }
             builder.setContentText(
@@ -90,7 +92,7 @@ object StatusNotification {
                 .setContentText(
                     listOfNotNull(
                         BreakPlans.current(context, s)?.let { "${it.length.formatShort()} break, back at ${it.end.formatClock()}" },
-                        s.returnBy?.let { "Back by ${it.formatClock()} to leave by ${rules.officeEnd.formatClock()}" }
+                        s.returnBy?.let { "Back by ${it.formatClock()} to leave at ${s.expectedLeave?.formatClock()}" }
                             ?: "$breakText · over the allowance",
                     ).joinToString(" · ")
                 )

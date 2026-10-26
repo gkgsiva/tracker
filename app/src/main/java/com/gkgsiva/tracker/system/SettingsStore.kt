@@ -27,8 +27,9 @@ object SettingsStore {
             .putInt("arriveBy", r.arriveBy.toSecondOfDay() / 60)
             .putInt("leaveAfter", r.leaveAfter.toSecondOfDay() / 60)
             .putLong("requiredMinutes", r.requiredInside.toMinutes())
-            .putInt("officeStart", r.officeStart.toSecondOfDay() / 60)
-            .putInt("officeEnd", r.officeEnd.toSecondOfDay() / 60)
+            .putLong("requiredPresentMinutes", r.requiredPresent.toMinutes())
+            // Official start and end hours were replaced by the in-office hours in 1.11.
+            .remove("officeStart").remove("officeEnd")
             .putLong("halfDayMinutes", r.halfDayHours.toMinutes())
             .putLong("shortLeaveMinutes", r.shortLeave.toMinutes())
             .putStringSet("weeklyOffs", settings.weeklyOffs.map { it.name }.toSet())
@@ -55,8 +56,7 @@ object SettingsStore {
                 arriveBy = LocalTime.ofSecondOfDay(p.getInt("arriveBy", d.rules.arriveBy.toSecondOfDay() / 60) * 60L),
                 leaveAfter = LocalTime.ofSecondOfDay(p.getInt("leaveAfter", d.rules.leaveAfter.toSecondOfDay() / 60) * 60L),
                 requiredInside = Duration.ofMinutes(p.getLong("requiredMinutes", d.rules.requiredInside.toMinutes())),
-                officeStart = LocalTime.ofSecondOfDay(p.getInt("officeStart", d.rules.officeStart.toSecondOfDay() / 60) * 60L),
-                officeEnd = LocalTime.ofSecondOfDay(p.getInt("officeEnd", d.rules.officeEnd.toSecondOfDay() / 60) * 60L),
+                requiredPresent = Duration.ofMinutes(p.getLong("requiredPresentMinutes", d.rules.requiredPresent.toMinutes())),
                 halfDayHours = Duration.ofMinutes(p.getLong("halfDayMinutes", d.rules.halfDayHours.toMinutes())),
                 shortLeave = Duration.ofMinutes(p.getLong("shortLeaveMinutes", d.rules.shortLeave.toMinutes())),
             ),

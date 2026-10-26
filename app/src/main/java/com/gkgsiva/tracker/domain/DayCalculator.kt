@@ -51,22 +51,32 @@ enum class EntryIssueKind { OUT_BEFORE_LOGIN, DOUBLE_IN, DOUBLE_OUT, OPEN_BREAK 
 data class EntryIssue(val kind: EntryIssueKind, val time: LocalTime)
 
 /** Rules whose breach makes the day loss of pay, regardless of hours worked. */
-enum class LopReason { LATE_LOGIN, EARLY_EXIT, UNDER_8H, MISSING_CHECKOUT }
+enum class LopReason {
+    LATE_LOGIN,
+    EARLY_EXIT,
+    /** Less than [Rules.requiredInside] of work, breaks excluded. */
+    SHORT_WORK,
+    /** Less than [Rules.requiredPresent] from login to logout, breaks included. */
+    SHORT_PRESENT,
+    MISSING_CHECKOUT,
+}
 
 data class DaySummary(
     val date: LocalDate,
     val status: DayStatus,
     val firstIn: LocalTime?,
     val lastOut: LocalTime?,
+    /** Work time, breaks excluded. */
     val inside: Duration,
     val breaks: Duration,
     val breakCount: Int,
+    /** Time until both the work and in-office hours are reached, if you keep working. */
     val remaining: Duration,
-    /** Break that still lets you leave by the official end time; see [Rules.breakAllowance]. */
+    /** Break that still lets you leave at the earliest the rules allow; see [Rules.breakAllowance]. */
     val breakAllowance: Duration,
     /** Break time left in [breakAllowance]; negative when over. A longer break isn't LOP by itself. */
     val breakLeft: Duration,
-    /** Earliest time you can leave and satisfy both the 8h and 5 PM rules (live days only). */
+    /** Earliest time you can leave meeting every rule: work hours, in-office hours, leave-after (live days only). */
     val expectedLeave: LocalTime?,
     /** Latest time to come back from the current break without exceeding the allowance. */
     val returnBy: LocalTime?,
@@ -75,18 +85,23 @@ data class DaySummary(
     /** Set when the manager regularized this day's LOP: the note, or "" without one. */
     val regularized: String? = null,
     val issues: List<EntryIssue> = emptyList(),
+    /** From first login to logout (or now), breaks included. */
+    val present: Duration = Duration.ZERO,
 ) {
     val wfh: Boolean get() = type == DayType.WFH
     val dayOff: Boolean get() = type.isDayOff
     val worked: Boolean get() = firstIn != null
-    val targetMet: Boolean get() = inside >= rules.requiredInside
+    val workMet: Boolean get() = inside >= rules.requiredInside
+    val presentMet: Boolean get() = present >= rules.requiredPresent
+    /** Both the work hours and the in-office hours are done. */
+    val targetMet: Boolean get() = workMet && presentMet
     val lateArrival: Boolean get() = firstIn != null && firstIn > rules.arriveBy
     val earlyLeave: Boolean get() = status == DayStatus.DONE && lastOut != null && lastOut < rules.leaveAfter
     val breakExceeded: Boolean get() = breakLeft.isNegative
     val finished: Boolean get() = status == DayStatus.DONE || status == DayStatus.MISSING_CHECKOUT
 
     /**
-     * Any single breach makes the day LOP, even with 8h+ inside. A late login is known as soon
+     * Any single breach makes the day LOP, even with extra hours. A late login is known as soon
      * as it happens; an early exit or short hours only once the day is finished.
      */
     val lopReasons: List<LopReason>
@@ -94,7 +109,11 @@ data class DaySummary(
             if (lateArrival) add(LopReason.LATE_LOGIN)
             if (earlyLeave) add(LopReason.EARLY_EXIT)
             if (status == DayStatus.MISSING_CHECKOUT) add(LopReason.MISSING_CHECKOUT)
-            else if (finished && !targetMet) add(LopReason.UNDER_8H)
+            else if (finished) {
+                if (!workMet) add(LopReason.SHORT_WORK)
+                // Without a separate office time (WFH, half day) this would only repeat SHORT_WORK.
+                if (!presentMet && rules.requiredPresent > rules.requiredInside) add(LopReason.SHORT_PRESENT)
+            }
         }
     /** LOP unless it was regularized; [lopReasons] still says what happened. */
     val lop: Boolean get() = lopReasons.isNotEmpty() && regularized == null
@@ -190,8 +209,11 @@ object DayCalculator {
             else -> DayStatus.DONE
         }
 
+        val live = status == DayStatus.INSIDE || status == DayStatus.ON_BREAK
+        val end = if (live) now else lastOut
+        val present = if (firstIn != null && end != null && end > firstIn) Duration.between(firstIn, end) else Duration.ZERO
         val remaining = if (type.isDayOff) Duration.ZERO
-        else (rules.requiredInside - inside).coerceAtLeast(Duration.ZERO)
+        else maxOf(rules.requiredInside - inside, rules.requiredPresent - present).coerceAtLeast(Duration.ZERO)
         val expectedLeave = if (now != null && (status == DayStatus.INSIDE || status == DayStatus.ON_BREAK)) {
             maxOf(now.plus(remaining), rules.leaveAfter)
         } else null
@@ -213,6 +235,7 @@ object DayCalculator {
             type = type,
             regularized = regularized,
             issues = issues,
+            present = present,
         )
     }
 

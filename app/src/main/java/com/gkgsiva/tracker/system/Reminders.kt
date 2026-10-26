@@ -77,8 +77,8 @@ object Reminders {
                 break
             }
         }
-        if (today.status == DayStatus.INSIDE && !today.targetMet) {
-            set(context, am, TARGET, now.plus(today.remaining).plusSeconds(1))
+        if (today.status == DayStatus.INSIDE) {
+            today.expectedLeave?.let { set(context, am, TARGET, now.toLocalDate().atTime(it).plusSeconds(1)) }
         }
         if (settings.remindLeave && today.status == DayStatus.INSIDE) {
             today.expectedLeave?.let { set(context, am, LEAVE, now.toLocalDate().atTime(it)) }
@@ -124,7 +124,7 @@ object Reminders {
                 notify(context, kind, "Time to log in", "Log in before ${rules.arriveBy.formatClock()} to avoid LOP.$extra")
             }
             LEAVE -> if (s.status == DayStatus.INSIDE && s.targetMet && now.toLocalTime() >= rules.leaveAfter) {
-                notify(context, kind, "You can leave now", "${s.inside.formatHm()} inside today. Remember to log out.")
+                notify(context, kind, "You can leave now", "${s.inside.formatHm()} worked, ${s.present.formatHm()} in the office today. Remember to log out.")
             }
             MONTH -> {
                 val start = now.toLocalDate().withDayOfMonth(1).minusMonths(1)

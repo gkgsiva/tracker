@@ -3,14 +3,15 @@
 A small Android app for tracking office hours under these rules (the [user guide](docs/user-guide.md)
 explains every screen; each release also carries it as a PDF):
 
-- Core hours: log in by **9:00 AM**, leave after **5:00 PM**
-- **8 hours** inside the office every day (hours don't carry over between days)
-- Official hours **8:30 AM to 5:30 PM** set the break: login to 5:30 PM minus 8h, so an 8:30 login gives
-  **1 hour**, an earlier login more and a later one less (a longer break is fine; you just stay later)
+- Core hours: log in by **9:00 AM**, log out after **5:00 PM**
+- **8 hours of work** every day, not counting breaks
+- **9 hours in the office** every day, from login to logout, counting breaks
+- Hours don't carry over between days
 
-Breaking any one of the first three rules makes the day **LOP** (loss of pay), even with more than 8 hours
-inside: a late login, leaving before 5 PM, or less than 8 hours inside. A late login shows as LOP right away;
-the other two once the day is over. If your manager regularizes an LOP, tap **Regularize** on that day
+Breaking any one of these makes the day **LOP** (loss of pay), and the app says which rule was missed.
+You can leave at the latest of login + 9h, reaching 8h of work, and 5 PM, so 9h minus 8h gives 1h of
+break; a longer break isn't LOP, you just stay later. A late login shows as LOP right away; the others
+once the day is over. If your manager regularizes an LOP, tap **Regularize** on that day
 (with an optional note): it then shows as Regularized, keeps the original reason, and isn't counted as LOP.
 
 ## How it works

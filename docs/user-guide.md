@@ -1,7 +1,7 @@
 # Office Tracker user guide
 
 Office Tracker records when you arrive, take breaks and leave, and tells you live whether today
-meets the office rules. This guide covers **version 1.10**. Your version is shown at the bottom of
+meets the office rules. This guide covers **version 1.11**. Your version is shown at the bottom of
 **Settings**.
 
 The screenshots come from the real app running on an Android emulator with demo data, with the
@@ -51,22 +51,21 @@ Everything stays on your phone. There is no account, nothing is sent anywhere, a
 | --- | --- | --- |
 | Log in by (core start) | 9:00 AM | The day is **LOP** as soon as you log in late |
 | Leave after (core end) | 5:00 PM | Logging out before this makes the day **LOP** |
-| Hours inside | 8h | Finishing the day with less than 8h inside makes it **LOP** |
-| Official hours | 8:30 AM to 5:30 PM | Sets your break allowance (below); never LOP by itself |
+| Work hours (no breaks) | 8h | Finishing with less than 8h of work, not counting breaks, makes it **LOP** |
+| In office (with breaks) | 9h | Finishing with less than 9h from login to logout, counting breaks, makes it **LOP** |
 
-Breaking **any one** of the first three rules makes the day LOP (loss of pay), even if you were
-inside for more than 8 hours.
+Breaking **any one** of these makes the day LOP (loss of pay), and the app says which one, for
+example "In office 8h 42m including breaks, 9h required".
 
-**Break allowance.** Your break for the day is the time from your login to 5:30 PM, minus 8 hours:
+**When you can leave** is the latest of three times: login + 9h, the moment you reach 8h of work, and
+5:00 PM. Log in at 8:18 AM and keep breaks to 1h, and you can leave at 5:18 PM, not 5:00 PM.
 
-- Log in at 8:30 AM: 9h until 5:30 PM, minus 8h, gives **1h** of break.
-- Log in at 8:00 AM: **1h 30m** of break.
-- Log in at 8:45 AM: **45m** of break.
+**Break allowance.** 9h in the office minus 8h of work leaves **1h** of break. Within that, you leave at
+login + 9h. A longer break is **not** LOP by itself; it only means staying later to reach 8h of work
+(a 1h 30m break after an 8:18 login means leaving at 5:48 PM). Logging in before 8:00 AM gives more,
+because 5:00 PM then comes later than login + 9h.
 
-Taking a longer break is **not** LOP. It only means you have to stay later to reach 8 hours inside.
-Before you log in, the app shows the allowance for an 8:30 login.
-
-**Each day stands on its own.** Every working day needs its own 8 hours inside. Extra time on one
+**Each day stands on its own.** Every working day needs its own 8 hours of work and 9 hours in the office. Extra time on one
 day never makes up for a short day, so the app never shows an average you need to catch up to.
 
 **Half days and short leave** have their own, lighter rules; see [Day types](#5-day-types).
@@ -102,7 +101,7 @@ The big button changes with where you are in the day:
   break** adds one. You get an alert a couple of minutes before the planned break ends, and again when it
   does (see [Notifications](#11-notifications-and-reminders)).
 - **Log out** when you leave for the day. If logging out now would make the day LOP, because it's
-  before 5:00 PM or you haven't done 8 hours yet, the app warns you first and says why. Tap **Log out**
+  before 5:00 PM, you haven't done 8 hours of work, or you haven't been in the office 9 hours, the app warns you first and says why. Tap **Log out**
   to go ahead anyway, or **Cancel**.
 - **I've left for the day** (shown during a break) turns the break you are on into your logout, for
   when you went on a break and didn't come back.
@@ -131,14 +130,15 @@ Scroll down for the details:
 
 ![Stats, outlook and details](screenshots/today-stats.png)
 
-- **Inside / Break / To go** tiles: time inside so far, break used with how much of the allowance is
-  left (or how far over you are), and how much more you need to reach 8h.
-- **Outlook**: a one-line forecast for today, such as "On track: stay until 5:38 PM", "Log in by
+- **Worked / Break / To go** tiles: work time so far (breaks not counted), break used with how much of
+  the allowance is left (or how far over you are), and the time until you can leave, with that time.
+- **Outlook**: a one-line forecast for today, such as "On track: you can leave at 5:18 PM (9h in office from 8:18 am)", "Log in by
   9:00 AM (25m left) to avoid LOP" or "LOP today: late login". Below it: LOP days this month, hours
   clocked this month, how many finished days met 8h, and working days left.
 - **Day type** (see the next section).
-- **Details**: first login (red if after 9:00 AM), breaks taken, **Back by** (during a break: the time to
-  be back so you can still leave by 5:30 PM), **You can leave at** (the later of "8h reached" and 5:00 PM),
+- **Details**: first login (red if after 9:00 AM), breaks taken, **In office (with breaks)** against 9h,
+  **Back from break by** (during a break: the time to be back so you can still leave at login + 9h),
+  **You can leave at** (the latest of login + 9h, 8h of work and 5:00 PM),
   and the logout time once you've left.
 - **Entries**: every login, break start, break end and logout for the day, each with edit and delete
   buttons.
@@ -154,15 +154,15 @@ Each day has a type. Tap the **Day type** row and pick one; each choice says wha
 | Type | What it means |
 | --- | --- |
 | **Office** (default) | Login, breaks and logout are tracked. All rules apply. |
-| **WFH** | Work from home. Only your first login and last logout count, there are no breaks, and the same LOP rules apply (log in by 9, leave after 5, 8h worked). |
-| **Half day** | 4 hours inside, at any time of day. There are no core hours, so no late-login or early-exit LOP; it is LOP only if you finish with less than 4h. |
-| **Short leave** | 2 hours off at the start or end of the day: 6 hours inside, log in by 11:00 AM, leave after 3:00 PM. |
+| **WFH** | Work from home. Only your first login and last logout count and there are no breaks. Log in by 9, leave after 5 and 8h of work; there's no separate 9h office time. |
+| **Half day** | 4 hours of work, at any time of day. There are no core hours, so no late-login or early-exit LOP; it is LOP only if you finish with less than 4h. |
+| **Short leave** | 2 hours off at the start or end of the day: 6h of work and 7h in the office, log in by 11:00 AM, leave after 3:00 PM. |
 | **Holiday** | No login needed, never LOP. |
 | **On leave** | No login needed, never LOP. Counted in your leave total for the year. |
 | **Weekly off** | Set automatically for your weekly off days (Saturday and Sunday unless you change them). No login needed. If you work that day, tap **Log in anyway** or choose Office. |
 
-On a half day or short leave the break allowance stays what an on-time login gives (1h by default),
-whenever you log in. The 4h and 2h amounts can be changed in [Settings](#13-settings).
+Short leave keeps the 1h break allowance (7h in office minus 6h of work). A half day has no break
+allowance: any break means staying longer to reach 4h. The 4h and 2h amounts can be changed in [Settings](#13-settings).
 
 | WFH | Half day | Short leave |
 | --- | --- | --- |
@@ -196,8 +196,9 @@ Changed your mind? Tap **Undo regularize** on that day. History keeps a list of 
 
 Forgot to tap, or tapped at the wrong time? Every entry can be fixed, on any day.
 
-- **Add**: in the Entries card tap **Add**, choose **In** (login or break end), **Break start** or
-  **Logout**, set the time and tap **Save**.
+- **Add**: in the Entries card tap **Add**, choose **Login**, **Break start**, **Break end** or
+  **Logout**, set the time and tap **Save**. If the entry doesn't fit the ones around it (a break end
+  with no break start before it, say), the dialog says so before you save.
 - **Edit**: tap the pencil next to an entry to change its time or kind.
 - **Delete**: tap the bin next to an entry, then **Delete**.
 
@@ -219,7 +220,7 @@ and your reason. It is part of the backup.
 
 **Forgotten logout.** If a working day in the last week has a login but no logout, Today shows
 **No logout on &lt;day&gt;** at the top. Tap **Add logout**: the app opens that day with the add dialog
-ready (set to Logout at 5:30 PM). Change the time to when you actually left and tap **Save**. The
+ready (set to Logout at login + 9h). Change the time to when you actually left and tap **Save**. The
 morning login reminder also mentions a missing logout.
 
 ![Missing logout prompt on Today](screenshots/today-missed-logout.png)
@@ -319,8 +320,8 @@ Tap the **share** icon to send a plain-text report through WhatsApp, email or an
 
 ## 11. Notifications and reminders
 
-**Live status notification.** While you're logged in, a quiet notification shows a countdown to 8h
-(or "8h done"), your leave time and break used. On a break it counts up your break time and says when
+**Live status notification.** While you're logged in, a quiet notification counts down to the time you
+can leave (or says "you can leave"), with your leave time and break used. On a break it counts up your break time and says when
 to be back (and your planned break length). It shows on the lock screen, even on phones that hide quiet
 notifications there, so you can check the time left without unlocking. Its **Start break**, **End
 break** and **Log out** buttons work from the lock screen without opening the app.
@@ -332,7 +333,7 @@ break** and **Log out** buttons work from the lock screen without opening the ap
 | Reminder | When |
 | --- | --- |
 | Log in reminder | 15 minutes before 9:00 AM on working days, if you haven't logged in. Also mentions a recent day with no logout. |
-| Time to leave | When you've done 8h and it's after 5:00 PM: "You can leave now. Remember to log out." |
+| Time to leave | When you've done 8h of work, 9h in the office and it's after 5:00 PM: "You can leave now. Remember to log out." |
 | Long break | 5 minutes before your break allowance runs out, and again when it does |
 | Planned break ending | A pop-up alert with an **End break** button, 2 minutes (adjustable) before the break length you picked runs out, and again when it does |
 | Month summary | On the 1st at 10:00 AM: for the month just ended, days that met 8h, LOP days, regularized days and total hours |
@@ -363,8 +364,8 @@ the lock screen. It is highlighted while you're on a break, and greyed out when 
 ![Settings: rules and appearance](screenshots/settings-rules.png)
 
 - **Office rules**: tap **Log in by** or **Leave after** to change the core hours, use **−** and **+** to
-  change **Hours inside** (in 30-minute steps), and tap **Official start** or **Official end** to
-  change the official hours that set your break allowance.
+  change **Work hours (no breaks)** and **In office (with breaks)** (in 30-minute steps). The line
+  below says what that gives as a break allowance.
 - **Half day and short leave**: hours needed on a half day (4h by default) and how much time short leave
   gives you (2h by default). The line below shows what that means, for example "6h inside, and can log
   in by 11:00 AM or leave after 3:00 PM".
@@ -412,7 +413,7 @@ later to reach 8h inside, and "You can leave at" moves accordingly.
 **I did 9 hours yesterday. Can I do 7 today?** No. Each day needs its own 8 hours; extra time doesn't
 carry over.
 
-**I forgot to tap Log in this morning.** Go to Today, tap **Add** in Entries, choose **In** and set
+**I forgot to tap Log in this morning.** Go to Today, tap **Add** in Entries, choose **Login** and set
 the time you arrived. To fix several times at once, use **Edit day**.
 
 **I have a doctor's appointment in the morning.** Set the day to **Short leave** (long-press it on the
