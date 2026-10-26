@@ -154,7 +154,7 @@ Each day has a type. Tap the **Day type** row and pick one; each choice says wha
 | Type | What it means |
 | --- | --- |
 | **Office** (default) | Login, breaks and logout are tracked. All rules apply. |
-| **WFH** | Work from home. Only your first login and last logout count and there are no breaks. Log in by 9, leave after 5 and 8h of work; there's no separate 9h office time. |
+| **WFH** | Work from home. Only your first login and last logout count and there are no breaks. Same rules as an office day: log in by 9, leave after 5, and 9h from login to logout. |
 | **Half day** | 4 hours of work, at any time of day. There are no core hours, so no late-login or early-exit LOP; it is LOP only if you finish with less than 4h. |
 | **Short leave** | 2 hours off at the start or end of the day: 6h of work and 7h in the office, log in by 11:00 AM, leave after 3:00 PM. |
 | **Holiday** | No login needed, never LOP. |

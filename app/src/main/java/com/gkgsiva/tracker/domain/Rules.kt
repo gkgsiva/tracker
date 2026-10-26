@@ -35,8 +35,8 @@ data class Rules(
     /**
      * The rules a day of [type] is held to. A half day needs [halfDayHours] of work with no core
      * hours; a short-leave day needs [shortLeave] less of both, may start that much after
-     * [arriveBy] and end that much before [leaveAfter]. Working from home has no office time, so
-     * only the work hours count.
+     * [arriveBy] and end that much before [leaveAfter]. Working from home is held to the same 9h
+     * from login to logout as an office day.
      */
     fun forType(type: DayType): Rules = when (type) {
         DayType.HALF_DAY -> copy(
@@ -51,7 +51,6 @@ data class Rules(
             arriveBy = arriveBy.plus(shortLeave),
             leaveAfter = leaveAfter.minus(shortLeave),
         )
-        DayType.WFH -> copy(requiredPresent = requiredInside)
         else -> this
     }
 }

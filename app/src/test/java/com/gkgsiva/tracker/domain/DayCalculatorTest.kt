@@ -199,9 +199,9 @@ class DayCalculatorTest {
 
     @Test
     fun wfhUsesOnlyFirstLoginAndLastLogout() {
-        val punches = listOf(inAt(8, 30), outAt(12, 0), inAt(13, 0), logoutAt(17, 0))
+        val punches = listOf(inAt(8, 30), outAt(12, 0), inAt(13, 0), logoutAt(17, 30))
         val s = DayCalculator.summarize(day, punches, now = null, type = DayType.WFH)
-        assertEquals(Duration.ofMinutes(510), s.inside)
+        assertEquals(Duration.ofMinutes(540), s.inside)
         assertEquals(Duration.ZERO, s.breaks)
         assertEquals(0, s.breakCount)
         assertFalse(s.lop)
@@ -374,8 +374,10 @@ class DayCalculatorTest {
     }
 
     @Test
-    fun wfhNeedsOnlyTheWorkHours() {
-        val s = DayCalculator.summarize(day, listOf(inAt(8, 30), logoutAt(17, 0)), null, type = DayType.WFH)
-        assertFalse(s.lop)
+    fun wfhNeedsNineHoursToo() {
+        val short = DayCalculator.summarize(day, listOf(inAt(8, 30), logoutAt(17, 0)), null, type = DayType.WFH)
+        assertEquals(listOf(LopReason.SHORT_PRESENT), short.lopReasons)
+        val full = DayCalculator.summarize(day, listOf(inAt(8, 30), logoutAt(17, 30)), null, type = DayType.WFH)
+        assertFalse(full.lop)
     }
 }

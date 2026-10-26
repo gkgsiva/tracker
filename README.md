@@ -30,7 +30,7 @@ The History screen shows daily (last 14 days), weekly (last 8 weeks) and monthly
 with inside time, break time and the 8h target, plus LOP days (highlighted in red on the daily chart) and counts of late logins and days under 8h.
 
 Each day has a type: **Office** (default), **WFH** (only the first login and last logout count, no breaks,
-same LOP rules), **Holiday** or **On leave** (no login needed, never LOP), **Half day** or **Short leave** (see below). History and reports count WFH,
+same LOP rules including the 9h), **Holiday** or **On leave** (no login needed, never LOP), **Half day** or **Short leave** (see below). History and reports count WFH,
 holiday and leave days separately. The share icon sends a text report for a day, this week or this month through any app
 (WhatsApp, email, …).
 
