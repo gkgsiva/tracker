@@ -108,9 +108,7 @@ The big button changes with where you are in the day:
 - **I've left for the day** (shown during a break) turns the break you are on into your logout, for
   when you went on a break and didn't come back.
 
-| A break just started | Warning before an early logout |
-| --- | --- |
-| ![A break just started, with its label and Set limit](screenshots/break-started.png) | ![Warning before an early logout](screenshots/logout-warning.png) |
+![Warning before an early logout](screenshots/logout-warning.png)
 
 You don't have to open the app for these. The [notification](#11-notifications-and-reminders),
 the [widget](#12-home-screen-widget-and-quick-settings-tile) and the
