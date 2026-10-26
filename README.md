@@ -67,10 +67,11 @@ While you're logged in, an ongoing notification counts down to the required hour
 and has Start break / End break / Log out buttons that work from the lock screen. A quick settings tile
 ("Office break") starts and ends breaks with one tap.
 
-**Planned breaks**: Start break asks how long the break will be (5 minutes to 1 hour, or no limit; your
-last choice comes first). A heads-up notification with an End break button arrives a couple of minutes
-before it ends (adjustable in Settings) and again when it does. Today shows the time left and lets you
-change the length mid-break. Breaks started from the widget, tile or notification use your last length.
+**Breaks**: Start break starts at once. Each break has a label (Breakfast, Tea, Lunch or Other, guessed
+from the time and changed with one tap) and shows on one line in Entries with its start, end and length.
+During a break, **Set limit** gives it the limit from Settings (15 minutes by default) and **Extend** adds
+more (5 minutes by default). A heads-up notification with End break and Extend buttons arrives a couple of
+minutes before the limit (adjustable in Settings) and again when it's up.
 
 **Half day** and **Short leave** are day types too. A half day needs 4 hours inside at any time, with no
 core hours. Short leave (2 hours by default) needs that much less inside and eases core hours by the same

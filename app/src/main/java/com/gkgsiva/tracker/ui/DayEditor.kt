@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.data.EditEntity
+import com.gkgsiva.tracker.domain.BreakLabel
 import com.gkgsiva.tracker.domain.BreakSpan
 import com.gkgsiva.tracker.domain.DayShape
 import java.time.Instant
@@ -70,7 +71,7 @@ fun DayEditorDialog(initial: DayShape, defaultLogin: LocalTime, defaultLogout: L
                 TimeLine("Login", shape.login) { picking = Slot.Login }
                 shape.breaks.forEachIndexed { i, b ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Break ${i + 1}", Modifier.weight(1f))
+                        Text(BreakLabel.textOf(b.label), Modifier.weight(1f))
                         TextButton(onClick = { picking = Slot.BreakStart(i) }) { Text(b.start.formatClock()) }
                         Text("–")
                         TextButton(onClick = { picking = Slot.BreakEnd(i) }) { Text(b.end?.formatClock() ?: "open") }
@@ -84,7 +85,7 @@ fun DayEditorDialog(initial: DayShape, defaultLogin: LocalTime, defaultLogout: L
                         // A new break goes after everything so far, as a 30-minute placeholder to adjust.
                         val after = shape.breaks.lastOrNull()?.let { it.end ?: it.start } ?: shape.login ?: defaultLogin
                         val start = after.plusMinutes(60)
-                        shape = shape.copy(breaks = shape.breaks + BreakSpan(start, start.plusMinutes(30)))
+                        shape = shape.copy(breaks = shape.breaks + BreakSpan(start, start.plusMinutes(30), BreakLabel.guess(start).name))
                     },
                     enabled = shape.login != null,
                 ) { Text("Add break") }
@@ -130,7 +131,7 @@ fun DayEditorDialog(initial: DayShape, defaultLogin: LocalTime, defaultLogout: L
 }
 
 @Composable
-private fun TimeLine(label: String, time: LocalTime?, modifier: Modifier = Modifier.fillMaxWidth(), onClick: () -> Unit) {
+internal fun TimeLine(label: String, time: LocalTime?, modifier: Modifier = Modifier.fillMaxWidth(), onClick: () -> Unit) {
     Row(modifier.clickable(onClick = onClick).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f))
         Text(time?.formatClock() ?: "Not set", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
@@ -139,7 +140,7 @@ private fun TimeLine(label: String, time: LocalTime?, modifier: Modifier = Modif
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TimePickDialog(initial: LocalTime, onDismiss: () -> Unit, onPick: (LocalTime) -> Unit) {
+internal fun TimePickDialog(initial: LocalTime, onDismiss: () -> Unit, onPick: (LocalTime) -> Unit) {
     val state = rememberTimePickerState(initial.hour, initial.minute, is24Hour = false)
     AlertDialog(
         onDismissRequest = onDismiss,

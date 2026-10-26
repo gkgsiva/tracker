@@ -40,7 +40,8 @@ object SettingsStore {
             .putString("theme", settings.theme.name)
             .putString("backupFolder", settings.backupFolder)
             .putBoolean("monthSummary", settings.monthSummary)
-            .putInt("breakPlan", settings.breakPlanMinutes ?: 0)
+            .putInt("breakPlan", settings.breakPlanMinutes)
+            .putInt("breakExtend", settings.breakExtendMinutes)
             .putInt("breakPlanLead", settings.breakPlanLeadMinutes)
             // Left over from the gate auto-login removed in 1.8.
             .remove("gateLat").remove("gateLng").remove("gateRadius")
@@ -71,7 +72,9 @@ object SettingsStore {
             theme = ThemeMode.entries.firstOrNull { it.name == p.getString("theme", null) } ?: d.theme,
             backupFolder = p.getString("backupFolder", null),
             monthSummary = p.getBoolean("monthSummary", d.monthSummary),
-            breakPlanMinutes = p.getInt("breakPlan", d.breakPlanMinutes ?: 0).takeIf { it > 0 },
+            // 0 meant "no limit" before 1.12, when a limit was chosen at the start of every break.
+            breakPlanMinutes = p.getInt("breakPlan", d.breakPlanMinutes).takeIf { it > 0 } ?: d.breakPlanMinutes,
+            breakExtendMinutes = p.getInt("breakExtend", d.breakExtendMinutes),
             breakPlanLeadMinutes = p.getInt("breakPlanLead", d.breakPlanLeadMinutes),
         )
     }

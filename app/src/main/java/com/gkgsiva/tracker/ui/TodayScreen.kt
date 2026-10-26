@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,7 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
@@ -62,8 +63,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.data.PunchEntity
+import com.gkgsiva.tracker.domain.BreakLabel
 import com.gkgsiva.tracker.domain.BreakPlan
 import com.gkgsiva.tracker.domain.DayShape
 import com.gkgsiva.tracker.domain.DayStatus
@@ -71,6 +74,7 @@ import com.gkgsiva.tracker.domain.DaySummary
 import com.gkgsiva.tracker.domain.DayType
 import com.gkgsiva.tracker.domain.EntryIssue
 import com.gkgsiva.tracker.domain.EntryIssueKind
+import com.gkgsiva.tracker.domain.EntryRow
 import com.gkgsiva.tracker.domain.Rules
 import com.gkgsiva.tracker.domain.Settings
 import java.time.Duration
@@ -122,12 +126,6 @@ private fun entryProblem(kind: EntryKind, time: LocalTime, others: List<PunchEnt
     }
 }
 
-private fun PunchEntity.label(isFirst: Boolean): String = when {
-    isIn -> if (isFirst) "Login" else "Break end"
-    isLogout -> "Logout"
-    else -> "Break start"
-}
-
 @Composable
 fun TodayScreen(
     punchesByDay: Map<LocalDate, List<PunchEntity>>,
@@ -160,10 +158,10 @@ fun TodayScreen(
 
     var editing by remember { mutableStateOf<PunchEntity?>(null) }
     var adding by remember { mutableStateOf(false) }
-    var deleting by remember { mutableStateOf<PunchEntity?>(null) }
+    // What a delete removes (a break is its start and end) and how to describe it.
+    var deleting by remember { mutableStateOf<Pair<String, List<PunchEntity>>?>(null) }
+    var editingBreak by remember { mutableStateOf<EntryRow.Break<PunchEntity>?>(null) }
     var confirmLogout by remember { mutableStateOf<(() -> Unit)?>(null) }
-    // Choosing a length for a new break (null plan) or changing the current one.
-    var planningBreak by remember { mutableStateOf(false) }
     var editingDay by remember { mutableStateOf(false) }
     val edits by vm.edits.collectAsStateWithLifecycle()
     val breakPlan = if (isToday) vm.breakPlan(summary) else null
@@ -234,16 +232,25 @@ fun TodayScreen(
                 status = summary.status,
                 wfh = wfh,
                 onLogin = { vm.punchNow(isIn = true) },
-                onBreakStart = { planningBreak = true },
+                onBreakStart = { vm.punchNow(isIn = false) },
                 onBreakEnd = { vm.punchNow(isIn = true) },
                 onLogout = { logout { vm.punchNow(isIn = false, isLogout = true) } },
                 onLeftDuringBreak = { punches.lastOrNull()?.let { last -> logout { vm.convertToLogout(last) } } },
             )
         }
 
-        if (breakPlan != null) BreakPlanCard(breakPlan, now.toLocalTime(), onChange = { planningBreak = true })
-        else if (isToday && summary.status == DayStatus.ON_BREAK) {
-            TextButton(onClick = { planningBreak = true }, modifier = Modifier.fillMaxWidth()) { Text("Set a length for this break") }
+        val breakStart = punches.lastOrNull()?.takeIf { !it.isIn && !it.isLogout }
+        if (isToday && summary.status == DayStatus.ON_BREAK && breakStart != null) {
+            BreakCard(
+                label = BreakLabel.of(breakStart.label),
+                plan = breakPlan,
+                now = now.toLocalTime(),
+                settings = settings,
+                onLabel = { vm.setBreakLabel(breakStart, it) },
+                onSetLimit = { vm.setBreakLimit(settings.breakPlanMinutes) },
+                onExtend = { vm.extendBreak() },
+                onClear = { vm.setBreakLimit(null) },
+            )
         }
 
         if (!summary.dayOff && !isFuture) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -305,9 +312,24 @@ fun TodayScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                punches.forEachIndexed { i, p ->
+                val rows = EntryRow.of(punches) { it.toPunch() }
+                if (rows.any { it is EntryRow.Break }) EntryHeader()
+                rows.forEachIndexed { i, row ->
                     if (i > 0) HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-                    PunchRow(p, isFirst = i == 0, onEdit = { editing = p }, onDelete = { deleting = p })
+                    when (row) {
+                        is EntryRow.Login -> EntryLine("Login", MaterialTheme.colorScheme.primary, row.entry.time) { editing = row.entry }
+                        is EntryRow.Logout -> EntryLine("Logout", MaterialTheme.colorScheme.onSurface, row.entry.time) { editing = row.entry }
+                        is EntryRow.Break -> {
+                            val endAt = row.end?.time ?: if (isToday) now.toLocalTime() else null
+                            EntryLine(
+                                BreakLabel.textOf(row.start.label),
+                                MaterialTheme.colorScheme.tertiary,
+                                row.start.time,
+                                end = row.end?.time?.formatClock() ?: "–",
+                                total = endAt?.let { Duration.between(row.start.time, it).coerceAtLeast(Duration.ZERO).formatHm() } ?: "–",
+                            ) { editingBreak = row }
+                        }
+                    }
                 }
             }
         }
@@ -322,26 +344,6 @@ fun TodayScreen(
             defaultLogout = rules.arriveBy.plus(rules.requiredPresent),
             onDismiss = { editingDay = false },
             onSave = { shape, reason -> vm.saveDay(date, shape, reason); editingDay = false },
-        )
-    }
-    if (planningBreak) {
-        val onBreak = summary.status == DayStatus.ON_BREAK
-        BreakPlanDialog(
-            title = if (onBreak) "Length of this break" else "Start a break",
-            initial = breakPlan?.length?.toMinutes()?.toInt() ?: settings.breakPlanMinutes,
-            confirm = if (onBreak) "Save" else "Start break",
-            onDismiss = { planningBreak = false },
-            onPick = { minutes ->
-                planningBreak = false
-                when {
-                    !onBreak -> vm.startBreak(minutes)
-                    breakPlan != null -> vm.replanBreak(breakPlan, minutes)
-                    // A break started without a plan: plan it from when it began.
-                    minutes != null && summary.lastOut != null -> vm.replanBreak(
-                        BreakPlan(date, summary.lastOut, Duration.ofMinutes(minutes.toLong())), minutes,
-                    )
-                }
-            },
         )
     }
     if (adding) {
@@ -362,27 +364,44 @@ fun TodayScreen(
             others = punches,
             wfh = wfh,
             onDismiss = { adding = false },
-            onConfirm = { time, kind -> vm.add(date, time, kind.isIn, kind.isLogout); adding = false },
+            onConfirm = { time, kind, label -> vm.add(date, time, kind.isIn, kind.isLogout, label); adding = false },
         )
     }
-    deleting?.let { p ->
+    deleting?.let { (what, entries) ->
         AlertDialog(
             onDismissRequest = { deleting = null },
-            title = { Text("Delete entry?") },
-            text = { Text("${p.label(isFirst = p == punches.firstOrNull())} at ${p.time.formatClock()}") },
-            confirmButton = { TextButton(onClick = { vm.delete(p); deleting = null }) { Text("Delete") } },
+            title = { Text(if (entries.size > 1) "Delete break?" else "Delete entry?") },
+            text = { Text(what) },
+            confirmButton = {
+                TextButton(onClick = { vm.deleteBreak(entries[0], entries.getOrNull(1)); deleting = null }) { Text("Delete") }
+            },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
         )
     }
     editing?.let { p ->
+        val kind = p.kindIn(punches)
         PunchDialog(
             title = "Edit entry",
             initialTime = p.time,
-            initialKind = p.kindIn(punches),
+            initialKind = kind,
+            initialLabel = BreakLabel.of(p.label),
             others = punches - p,
             wfh = wfh,
             onDismiss = { editing = null },
-            onConfirm = { time, kind -> vm.update(p, time, kind.isIn, kind.isLogout); editing = null },
+            onConfirm = { time, k, label -> vm.update(p, time, k.isIn, k.isLogout, label); editing = null },
+            onDelete = { editing = null; deleting = "${kind.label} at ${p.time.formatClock()}" to listOf(p) },
+        )
+    }
+    editingBreak?.let { row ->
+        BreakDialog(
+            row = row,
+            onDismiss = { editingBreak = null },
+            onSave = { label, from, to -> vm.saveBreak(row.start, row.end, label, from, to); editingBreak = null },
+            onDelete = {
+                editingBreak = null
+                val span = row.start.time.formatClock() + (row.end?.let { " – " + it.time.formatClock() } ?: "")
+                deleting = "${BreakLabel.textOf(row.start.label)} break $span" to listOfNotNull(row.start, row.end)
+            },
         )
     }
     if (pickingDate) {
@@ -541,64 +560,59 @@ private fun DayType.meaning(rules: Rules): String = when (this) {
     DayType.WEEKLY_OFF -> "Weekly off · choose Office if you're working"
 }
 
-/** The break in progress against its planned length. */
+/** The break in progress: what it's for, and its limit with buttons to set or extend it. */
 @Composable
-private fun BreakPlanCard(plan: BreakPlan, now: LocalTime, onChange: () -> Unit) {
-    val left = plan.left(now)
-    val over = left.isNegative
+private fun BreakCard(
+    label: BreakLabel?,
+    plan: BreakPlan?,
+    now: LocalTime,
+    settings: Settings,
+    onLabel: (BreakLabel) -> Unit,
+    onSetLimit: () -> Unit,
+    onExtend: () -> Unit,
+    onClear: () -> Unit,
+) {
+    val left = plan?.left(now)
+    val over = left?.isNegative == true
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = if (over) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.tertiaryContainer,
         ),
     ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    if (over) "${left.negated().formatHm()} over your ${plan.length.formatShort()} break"
-                    else "${left.formatHm()} left of your ${plan.length.formatShort()} break",
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text("Planned back at ${plan.end.formatClock()}", style = MaterialTheme.typography.bodySmall)
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LabelChips(label, onLabel)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (plan == null || left == null) {
+                    Text("No limit", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Button(onClick = onSetLimit) { Text("Set ${settings.breakPlanMinutes}m limit") }
+                } else {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (over) "${left.negated().formatHm()} over your ${plan.length.formatShort()} limit"
+                            else "${left.formatHm()} left of ${plan.length.formatShort()}",
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text("Back at ${plan.end.formatClock()}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Button(onClick = onExtend) { Text("Extend ${settings.breakExtendMinutes}m") }
+                    IconButton(onClick = onClear) { Icon(Icons.Filled.Close, contentDescription = "Remove limit") }
+                }
             }
-            TextButton(onClick = onChange) { Text("Change") }
         }
     }
 }
 
-/** Picks how long a break should last; you get a heads-up before it ends. */
+/** Breakfast, Tea, Lunch and Other, two to a row so the names fit at any text size. */
 @Composable
-private fun BreakPlanDialog(title: String, initial: Int?, confirm: String, onDismiss: () -> Unit, onPick: (Int?) -> Unit) {
-    var minutes by remember { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                (BreakPlan.CHOICES.map<Int, Int?> { it } + null).chunked(3).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { m ->
-                            FilterChip(
-                                selected = minutes == m,
-                                onClick = { minutes = m },
-                                modifier = Modifier.weight(1f),
-                                label = { Text(m?.let { Duration.ofMinutes(it.toLong()).formatShort() } ?: "No limit", Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
-                            )
-                        }
-                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
-                Text(
-                    if (minutes == null) "No alert; the break allowance reminder still applies."
-                    else "You'll get an alert shortly before it ends, and when it does.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+private fun LabelChips(selected: BreakLabel?, onPick: (BreakLabel) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        BreakLabel.entries.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEach { l -> ChoiceChip(l.text, selected = selected == l, onClick = { onPick(l) }, Modifier.weight(1f)) }
             }
-        },
-        confirmButton = { TextButton(onClick = { onPick(minutes) }) { Text(confirm) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
+        }
+    }
 }
 
 @Composable
@@ -871,21 +885,94 @@ private fun DetailLine(label: String, value: String, warn: Boolean = false) {
     }
 }
 
+/** Column titles over the entry lines, shown once the day has a break. */
 @Composable
-private fun PunchRow(p: PunchEntity, isFirst: Boolean, onEdit: () -> Unit, onDelete: () -> Unit) {
-    Row(Modifier.padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(p.time.formatClock(), Modifier.width(96.dp), fontWeight = FontWeight.Medium)
-        Text(
-            p.label(isFirst),
-            Modifier.weight(1f),
-            color = when {
-                p.isIn -> MaterialTheme.colorScheme.primary
-                p.isLogout -> MaterialTheme.colorScheme.onSurface
-                else -> MaterialTheme.colorScheme.tertiary
-            },
-        )
-        IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit") }
-        IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete") }
+private fun EntryHeader() {
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 52.dp, top = 4.dp)) {
+        listOf("", "Start", "End", "Total").forEachIndexed { i, t ->
+            Text(
+                t,
+                Modifier.weight(if (i == 0) 1.2f else 1f),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = if (i == 3) TextAlign.End else TextAlign.Start,
+            )
+        }
+    }
+}
+
+/** One line of the entry list: a login or logout, or a whole break with its end and length. */
+@Composable
+private fun EntryLine(
+    label: String,
+    color: Color,
+    start: LocalTime,
+    end: String = "",
+    total: String = "",
+    onEdit: () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Cell(label, 1.2f, color)
+        Cell(start.formatClock(), 1f, bold = true)
+        Cell(end, 1f, bold = true)
+        Cell(total, 1f, align = TextAlign.End)
+        IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit $label") }
+    }
+}
+
+@Composable
+private fun RowScope.Cell(text: String, weight: Float, color: Color = Color.Unspecified, align: TextAlign = TextAlign.Start, bold: Boolean = false) = Text(
+    text,
+    Modifier.weight(weight),
+    color = color,
+    textAlign = align,
+    fontWeight = if (bold) FontWeight.Medium else null,
+    maxLines = 1,
+    softWrap = false,
+    overflow = TextOverflow.Ellipsis,
+)
+
+/** Edits a whole break: what it was for, when it started and (once over) when it ended. */
+@Composable
+private fun BreakDialog(
+    row: EntryRow.Break<PunchEntity>,
+    onDismiss: () -> Unit,
+    onSave: (BreakLabel, LocalTime, LocalTime?) -> Unit,
+    onDelete: () -> Unit,
+) {
+    var label by remember { mutableStateOf(BreakLabel.of(row.start.label) ?: BreakLabel.guess(row.start.time)) }
+    var from by remember { mutableStateOf(row.start.time) }
+    var to by remember { mutableStateOf(row.end?.time) }
+    // Which time is being picked: the start (false) or the end (true).
+    var picking by remember { mutableStateOf<Boolean?>(null) }
+    val problem = to?.let { if (it <= from) "The break ends before it starts." else null }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit break") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LabelChips(label) { label = it }
+                Spacer(Modifier.height(4.dp))
+                TimeLine("Start", from) { picking = false }
+                val end = to
+                if (end != null) TimeLine("End", end) { picking = true }
+                else Text("Still on this break", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (problem != null) Text(problem, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(label, from, to) }, enabled = problem == null) { Text("Save") } },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+    )
+    picking?.let { endSlot ->
+        TimePickDialog(if (endSlot) to ?: from else from, onDismiss = { picking = null }) { t ->
+            if (endSlot) to = t else from = t
+            picking = null
+        }
     }
 }
 
@@ -898,10 +985,15 @@ private fun PunchDialog(
     others: List<PunchEntity>,
     wfh: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (LocalTime, EntryKind) -> Unit,
+    onConfirm: (LocalTime, EntryKind, BreakLabel?) -> Unit,
+    initialLabel: BreakLabel? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     val state = rememberTimePickerState(initialTime.hour, initialTime.minute, is24Hour = false)
     var kind by remember { mutableStateOf(initialKind) }
+    // Until one is picked, a break start shows the guess for its time.
+    var label by remember { mutableStateOf(initialLabel) }
+    val shownLabel = label ?: BreakLabel.guess(LocalTime.of(state.hour, state.minute))
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -921,6 +1013,10 @@ private fun PunchDialog(
                         if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
+                if (kind == EntryKind.BREAK) {
+                    Spacer(Modifier.height(8.dp))
+                    LabelChips(shownLabel) { label = it }
+                }
                 Spacer(Modifier.height(12.dp))
                 TimePicker(state = state)
                 entryProblem(kind, LocalTime.of(state.hour, state.minute), others)?.let {
@@ -929,8 +1025,13 @@ private fun PunchDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(LocalTime.of(state.hour, state.minute), kind) }) { Text("Save") }
+            TextButton(onClick = { onConfirm(LocalTime.of(state.hour, state.minute), kind, if (kind == EntryKind.BREAK) shownLabel else null) }) { Text("Save") }
         },
-        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = {
+            Row {
+                if (onDelete != null) TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                OutlinedButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
     )
 }

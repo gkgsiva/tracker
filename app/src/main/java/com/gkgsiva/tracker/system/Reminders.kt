@@ -144,8 +144,8 @@ object Reminders {
             PLAN -> BreakPlans.current(context, s)?.let { plan ->
                 val left = plan.left(now.toLocalTime())
                 val title = if (left.seconds > 30) "Break ends in ${left.plusSeconds(30).formatShort()}"
-                else "Your ${plan.length.formatShort()} break is up"
-                planAlert(context, title, "Planned to be back at ${plan.end.formatClock()}. ${s.breaks.formatHm()} of break today.")
+                else "Your ${plan.length.formatShort()} break limit is up"
+                planAlert(context, title, "Back at ${plan.end.formatClock()}. ${s.breaks.formatHm()} of break today.", SettingsStore.get(context).breakExtendMinutes)
             }
             BREAK -> if (s.status == DayStatus.ON_BREAK) {
                 val returnBy = s.returnBy
@@ -159,8 +159,8 @@ object Reminders {
         Tracker.onChanged(context)
     }
 
-    /** A heads-up notification (it pops up and makes a sound) with an End break button. */
-    private fun planAlert(context: Context, title: String, text: String) {
+    /** A heads-up notification (it pops up and makes a sound) with End break and Extend buttons. */
+    private fun planAlert(context: Context, title: String, text: String, extendMinutes: Int) {
         if (!canNotify(context)) return
         val nm = context.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(PLAN_CHANNEL, "Planned break ending", NotificationManager.IMPORTANCE_HIGH))
@@ -177,6 +177,7 @@ object Reminders {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(open)
             .addAction(0, "End break", TrackerWidget.punchIntent(context, TrackerWidget.Companion.Action.BREAK_END))
+            .addAction(0, "Extend ${extendMinutes}m", TrackerWidget.extendIntent(context))
             .setAutoCancel(true)
             .build()
         nm.notify(PLAN, notification)

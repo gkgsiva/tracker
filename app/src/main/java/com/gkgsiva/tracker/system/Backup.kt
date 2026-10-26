@@ -8,6 +8,7 @@ import com.gkgsiva.tracker.data.AppDatabase
 import com.gkgsiva.tracker.data.DayEntity
 import com.gkgsiva.tracker.data.EditEntity
 import com.gkgsiva.tracker.data.PunchEntity
+import com.gkgsiva.tracker.domain.BreakLabel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -22,7 +23,8 @@ import java.time.ZoneId
 
 /**
  * CSV backup of all entries and day types:
- * `punch,2026-10-23,08:42:00,IN,` / `punch,…,BREAK,` / `punch,…,LOGOUT,` and `day,2026-10-24,,,LEAVE`.
+ * `punch,2026-10-23,08:42:00,IN,` / `punch,…,BREAK,LUNCH` / `punch,…,LOGOUT,` and `day,2026-10-24,,,LEAVE`.
+ * A break start's label, if any, goes in the last column.
  * A regularized day adds `,REGULARIZED,<note>` (the note may contain commas; it runs to the end of the line)
  * and puts the date it was regularized in the time column. Hand edits are
  * `edit,<date>,<when, ISO>,<reason without commas>,<change to the end of the line>`.
@@ -97,7 +99,7 @@ object Backup {
                     p.isLogout -> "LOGOUT"
                     else -> "BREAK"
                 }
-                appendLine("punch,${p.date},${p.time},$event,")
+                appendLine("punch,${p.date},${p.time},$event,${if (event == "BREAK") p.label.orEmpty() else ""}")
             }
             days.forEach { d ->
                 val regularized = if (d.regularized) ",REGULARIZED,${d.note.orEmpty().replace('\n', ' ')}" else ""
@@ -131,6 +133,7 @@ object Backup {
                             secondOfDay = LocalTime.parse(f[2]).toSecondOfDay(),
                             isIn = f[3] == "IN",
                             isLogout = f[3] == "LOGOUT",
+                            label = f.getOrNull(4)?.takeIf { f[3] == "BREAK" && BreakLabel.of(it) != null },
                         )
                         "day" -> days += DayEntity(
                             epochDay = date.toEpochDay(),

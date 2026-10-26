@@ -3,7 +3,7 @@ package com.gkgsiva.tracker.domain
 import java.time.LocalTime
 
 /** A break from [start] until [end]; [end] is null for a break you never came back from (yet). */
-data class BreakSpan(val start: LocalTime, val end: LocalTime?)
+data class BreakSpan(val start: LocalTime, val end: LocalTime?, val label: String? = null)
 
 /**
  * A day's entries as login, breaks and logout, the way you'd describe them, so a whole day can
@@ -15,7 +15,7 @@ data class DayShape(val login: LocalTime?, val breaks: List<BreakSpan>, val logo
         if (login == null) return@buildList
         add(Punch(login, isIn = true))
         breaks.forEach { b ->
-            add(Punch(b.start, isIn = false))
+            add(Punch(b.start, isIn = false, label = b.label))
             if (b.end != null) add(Punch(b.end, isIn = true))
         }
         if (logout != null) add(Punch(logout, isIn = false, isLogout = true))
@@ -40,7 +40,7 @@ data class DayShape(val login: LocalTime?, val breaks: List<BreakSpan>, val logo
 
     /** What changed from [before] to this, e.g. "login 9:05 AM → 8:55 AM; break 1:00 PM–1:30 PM added". */
     fun describeChange(before: DayShape, fmt: (LocalTime) -> String): String {
-        fun span(b: BreakSpan) = fmt(b.start) + "–" + (b.end?.let(fmt) ?: "open")
+        fun span(b: BreakSpan) = (BreakLabel.of(b.label)?.let { it.text + " " } ?: "") + fmt(b.start) + "–" + (b.end?.let(fmt) ?: "open")
         fun time(label: String, old: LocalTime?, new: LocalTime?): String? = when {
             old == new -> null
             old == null -> "$label ${fmt(new!!)} added"
@@ -70,6 +70,7 @@ data class DayShape(val login: LocalTime?, val breaks: List<BreakSpan>, val logo
             var login: LocalTime? = null
             val breaks = mutableListOf<BreakSpan>()
             var openOut: LocalTime? = null
+            var openLabel: String? = null
             var outWasLogout = false
             var inside = false
             for (p in punches.sortedBy { it.time }) {
@@ -77,18 +78,19 @@ data class DayShape(val login: LocalTime?, val breaks: List<BreakSpan>, val logo
                     if (inside) continue
                     // Logging in again after a logout makes that logout a break, as in the day's calculation.
                     if (login == null) login = p.time
-                    else openOut?.let { breaks += BreakSpan(it, p.time) }
+                    else openOut?.let { breaks += BreakSpan(it, p.time, openLabel) }
                     openOut = null
                     inside = true
                 } else {
                     if (!inside) continue
                     inside = false
                     openOut = p.time
+                    openLabel = p.label
                     outWasLogout = p.isLogout
                 }
             }
             val logout = openOut?.takeIf { outWasLogout }
-            if (openOut != null && !outWasLogout) breaks += BreakSpan(openOut, null)
+            if (openOut != null && !outWasLogout) breaks += BreakSpan(openOut, null, openLabel)
             return DayShape(login, breaks, logout)
         }
     }
