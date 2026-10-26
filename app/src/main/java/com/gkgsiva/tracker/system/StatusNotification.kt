@@ -70,7 +70,7 @@ object StatusNotification {
         if (s.status == DayStatus.INSIDE) {
             val title = if (s.wfh) "Working from home" else "Inside office"
             val untilLeave = s.expectedLeave?.let { Duration.between(LocalTime.now(), it) } ?: Duration.ZERO
-            if (!untilLeave.isPositive) {
+            if (untilLeave.isNegative || untilLeave.isZero) {
                 builder.setContentTitle("$title · you can leave")
                     .setWhen(now - s.inside.toMillis())
             } else {
