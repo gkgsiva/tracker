@@ -1,7 +1,7 @@
 # Office Tracker user guide
 
 Office Tracker records when you arrive, take breaks and leave, and tells you live whether today
-meets the office rules. This guide covers **version 1.11**. Your version is shown at the bottom of
+meets the office rules. This guide covers **version 1.12**. Your version is shown at the bottom of
 **Settings**.
 
 The screenshots come from the real app running on an Android emulator with demo data, with the
@@ -92,28 +92,29 @@ The big button changes with where you are in the day:
 | On a weekly off day | **Log in anyway** (turns the day into a working day) |
 
 - **Log in** when you arrive. The time is recorded to the second.
-- **Start break** when you step out. The app asks how long the break will be: 5, 10, 15, 20, 30 or
-  45 minutes, 1 hour, or **No limit**. Your last choice is selected, so usually you just tap
-  **Start break** again. Tap **End break** when you are back. You can take as many breaks as you like;
-  they are all added up.
-- During a planned break, Today shows "12m left of your 15m break" and the time you planned to be back.
-  Tap **Change** to make the break longer or shorter. If you picked No limit, **Set a length for this
-  break** adds one. You get an alert a couple of minutes before the planned break ends, and again when it
-  does (see [Notifications](#11-notifications-and-reminders)).
+- **Start break** when you step out. The break starts straight away, with no questions. Tap **End
+  break** when you are back. You can take as many breaks as you like; they are all added up.
+- **What the break is for.** During a break Today shows **Breakfast**, **Tea**, **Lunch** and
+  **Other**. The app picks one from the time (Breakfast before 10:30 AM, Lunch from 12:00 to 2:30 PM,
+  Tea otherwise); tap another to change it. You can also change it later in the Entries list.
+- **Limit and Extend.** A break has no limit until you tap **Set 15m limit** on the break card (the
+  length is set in Settings). Today then shows "12m left of 15m" and the time to be back. **Extend 5m**
+  adds more time (also set in Settings), and the **×** removes the limit. You get an alert a couple of
+  minutes before the limit, and again when it's up; that alert has **End break** and **Extend**
+  buttons (see [Notifications](#11-notifications-and-reminders)).
 - **Log out** when you leave for the day. If logging out now would make the day LOP, because it's
   before 5:00 PM, you haven't done 8 hours of work, or you haven't been in the office 9 hours, the app warns you first and says why. Tap **Log out**
   to go ahead anyway, or **Cancel**.
 - **I've left for the day** (shown during a break) turns the break you are on into your logout, for
   when you went on a break and didn't come back.
 
-| Choosing the break length | Warning before an early logout |
-| --- | --- |
-| ![Start a break dialog](screenshots/break-plan-dialog.png) | ![Warning before an early logout](screenshots/logout-warning.png) |
+![Warning before an early logout](screenshots/logout-warning.png)
 
 You don't have to open the app for these. The [notification](#11-notifications-and-reminders),
 the [widget](#12-home-screen-widget-and-quick-settings-tile) and the
 [quick settings tile](#12-home-screen-widget-and-quick-settings-tile) have the same buttons. A break
-started from one of those uses the length you chose last time.
+started from one of those starts the same way, and the notification has a **Set limit** / **Extend**
+button while you're on it.
 
 ## 4. The clock dial and the numbers under it
 
@@ -140,8 +141,8 @@ Scroll down for the details:
   **Back from break by** (during a break: the time to be back so you can still leave at login + 9h),
   **You can leave at** (the latest of login + 9h, 8h of work and 5:00 PM),
   and the logout time once you've left.
-- **Entries**: every login, break start, break end and logout for the day, each with edit and delete
-  buttons.
+- **Entries**: the day's login, each break on one line (what it was for, start, end and how long;
+  the end shows "–" while the break is still going) and the logout. Tap a line or its pencil to edit it.
 
 ![Entries list](screenshots/today-entries.png)
 
@@ -197,10 +198,13 @@ Changed your mind? Tap **Undo regularize** on that day. History keeps a list of 
 Forgot to tap, or tapped at the wrong time? Every entry can be fixed, on any day.
 
 - **Add**: in the Entries card tap **Add**, choose **Login**, **Break start**, **Break end** or
-  **Logout**, set the time and tap **Save**. If the entry doesn't fit the ones around it (a break end
-  with no break start before it, say), the dialog says so before you save.
-- **Edit**: tap the pencil next to an entry to change its time or kind.
-- **Delete**: tap the bin next to an entry, then **Delete**.
+  **Logout**, set the time and tap **Save**. A break start also asks what the break is for. If the entry
+  doesn't fit the ones around it (a break end with no break start before it, say), the dialog says so
+  before you save.
+- **Edit**: tap a line in Entries. A break opens **Edit break**, where you change what it was for, its
+  start and its end together; a login or logout opens the usual entry dialog.
+- **Delete**: open the line and tap **Delete**, then confirm. Deleting a break removes its start and
+  end together.
 
 ![Add entry dialog](screenshots/add-entry-dialog.png)
 
@@ -322,11 +326,12 @@ Tap the **share** icon to send a plain-text report through WhatsApp, email or an
 
 **Live status notification.** While you're logged in, a quiet notification counts down to the time you
 can leave (or says "you can leave"), with your leave time and break used. On a break it counts up your break time and says when
-to be back (and your planned break length). It shows on the lock screen, even on phones that hide quiet
+to be back (and the break's limit, if you set one), with **End break** and **Set limit** or **Extend**
+buttons. It shows on the lock screen, even on phones that hide quiet
 notifications there, so you can check the time left without unlocking. Its **Start break**, **End
 break** and **Log out** buttons work from the lock screen without opening the app.
 
-![Status notification during a 15-minute planned break](screenshots/notification-status.png)
+![Status notification during a break with a 15-minute limit](screenshots/notification-status.png)
 
 **Reminders** (each can be turned off in Settings):
 
@@ -335,7 +340,7 @@ break** and **Log out** buttons work from the lock screen without opening the ap
 | Log in reminder | 15 minutes before 9:00 AM on working days, if you haven't logged in. Also mentions a recent day with no logout. |
 | Time to leave | When you've done 8h of work, 9h in the office and it's after 5:00 PM: "You can leave now. Remember to log out." |
 | Long break | 5 minutes before your break allowance runs out, and again when it does |
-| Planned break ending | A pop-up alert with an **End break** button, 2 minutes (adjustable) before the break length you picked runs out, and again when it does |
+| Break limit | A pop-up alert with **End break** and **Extend** buttons, 2 minutes (adjustable) before a break's limit, and again when it's up. Only for breaks you set a limit on |
 | Month summary | On the 1st at 10:00 AM: for the month just ended, days that met 8h, LOP days, regularized days and total hours |
 
 The reminders are a few one-off alarms. The app does no other work in the background, so it doesn't
@@ -372,8 +377,9 @@ the lock screen. It is highlighted while you're on a break, and greyed out when 
 - **Appearance**: **System** (follows the phone's dark mode), **Light** or **Dark**.
 - **Weekly off days**: tap the days you don't work. Saturday and Sunday are selected by default.
 - **Reminders**: switches for Log in reminder, Time to leave, Long break, Month summary and the live
-  Status notification, and **Planned break alert** (how many minutes before a planned break ends you
-  get the alert, 1 to 10).
+  Status notification; **Break limit** (what **Set limit** gives a break, 5 to 90 minutes, 15 by
+  default), **Extend by** (what **Extend** adds, 1 to 30 minutes, 5 by default) and **Alert before
+  limit** (1 to 10 minutes).
 - **Backup**: see the next section.
 - At the bottom: the app version, and tips for the widget and tile.
 

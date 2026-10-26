@@ -4,7 +4,7 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 
-/** How long you meant a break to be, set when it starts. */
+/** A limit set on the break in progress: how long you mean it to be. */
 data class BreakPlan(val date: LocalDate, val start: LocalTime, val length: Duration) {
     val end: LocalTime get() = start.plus(length)
 
@@ -14,8 +14,6 @@ data class BreakPlan(val date: LocalDate, val start: LocalTime, val length: Dura
     /** Time left on the plan at [now]; negative once it has run over. */
     fun left(now: LocalTime): Duration = Duration.between(now, end)
 
-    companion object {
-        /** Lengths offered when starting a break, in minutes. */
-        val CHOICES = listOf(5, 10, 15, 20, 30, 45, 60)
-    }
+    /** The same break with [by] more time. */
+    fun extended(by: Duration): BreakPlan = copy(length = length + by)
 }

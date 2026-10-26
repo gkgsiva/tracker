@@ -151,7 +151,10 @@ shot today-stats
 scroll_to Entries
 shot today-entries
 to_top
-tap "Start break" first 2 && { shot break-plan-dialog; tap "Start break" first 3; }
+tap "Start break" first 2
+to_top
+shot break-started 2
+tap "Set 15m limit" first 2
 to_top
 shot today-on-break 2
 

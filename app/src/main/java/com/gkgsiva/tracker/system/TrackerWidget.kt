@@ -40,6 +40,8 @@ class TrackerWidget : AppWidgetProvider() {
                 LocalDateTime.now()
             }
             goAsyncIo { Tracker.punchNow(context, isIn, isLogout, at) }
+        } else if (intent.action == ACTION_EXTEND) {
+            goAsyncIo { Tracker.extendBreak(context) }
         } else {
             super.onReceive(context, intent)
         }
@@ -47,6 +49,7 @@ class TrackerWidget : AppWidgetProvider() {
 
     companion object {
         private const val ACTION_PUNCH = "com.gkgsiva.tracker.PUNCH"
+        private const val ACTION_EXTEND = "com.gkgsiva.tracker.EXTEND_BREAK"
         private const val EXTRA_IN = "isIn"
         private const val EXTRA_LOGOUT = "isLogout"
         private const val EXTRA_AT = "atMillis"
@@ -127,6 +130,12 @@ class TrackerWidget : AppWidgetProvider() {
             views.setTextViewText(viewId, action.label)
             views.setOnClickPendingIntent(viewId, punchIntent(context, action))
         }
+
+        /** Broadcast that extends the break's limit, or sets the default limit when it has none. */
+        fun extendIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
+            context, 300, Intent(context, TrackerWidget::class.java).setAction(ACTION_EXTEND),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
 
         /**
          * Broadcast that records [action] without opening the app: right now, or at [atMillis]

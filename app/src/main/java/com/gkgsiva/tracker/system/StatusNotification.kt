@@ -39,7 +39,8 @@ object StatusNotification {
     fun update(context: Context, s: DaySummary) {
         val nm = context.getSystemService(NotificationManager::class.java)
         val live = s.status == DayStatus.INSIDE || s.status == DayStatus.ON_BREAK
-        if (!SettingsStore.get(context).statusNotification || !live || !canNotify(context)) {
+        val settings = SettingsStore.get(context)
+        if (!settings.statusNotification || !live || !canNotify(context)) {
             nm.cancel(ID)
             return
         }
@@ -86,17 +87,19 @@ object StatusNotification {
             if (!s.wfh) builder.addAction(0, "Start break", TrackerWidget.punchIntent(context, Action.BREAK_START))
             builder.addAction(0, "Log out", TrackerWidget.punchIntent(context, Action.LOGOUT))
         } else {
+            val plan = BreakPlans.current(context, s)
             // Counts up through the day's total break time.
             builder.setContentTitle("On break · ${s.remaining.formatHm()} still to go")
                 .setWhen(now - s.breaks.toMillis())
                 .setContentText(
                     listOfNotNull(
-                        BreakPlans.current(context, s)?.let { "${it.length.formatShort()} break, back at ${it.end.formatClock()}" },
+                        plan?.let { "${it.length.formatShort()} limit, back at ${it.end.formatClock()}" },
                         s.returnBy?.let { "Back by ${it.formatClock()} to leave at ${s.expectedLeave?.formatClock()}" }
                             ?: "$breakText · over the allowance",
                     ).joinToString(" · ")
                 )
                 .addAction(0, "End break", TrackerWidget.punchIntent(context, Action.BREAK_END))
+                .addAction(0, if (plan == null) "Set ${settings.breakPlanMinutes}m limit" else "Extend ${settings.breakExtendMinutes}m", TrackerWidget.extendIntent(context))
         }
         nm.notify(ID, builder.build())
     }

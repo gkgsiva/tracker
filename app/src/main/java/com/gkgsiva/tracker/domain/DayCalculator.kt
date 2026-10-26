@@ -9,7 +9,8 @@ import java.time.LocalTime
  * A single check-in (isIn = true) or check-out on some day. A check-out with [isLogout] ends the
  * day; any other check-out starts a break.
  */
-data class Punch(val time: LocalTime, val isIn: Boolean, val isLogout: Boolean = false)
+/** One entry. A break start may carry a [label] (a [BreakLabel] name); the calculation ignores it. */
+data class Punch(val time: LocalTime, val isIn: Boolean, val isLogout: Boolean = false, val label: String? = null)
 
 enum class DayStatus { NOT_STARTED, INSIDE, ON_BREAK, DONE, MISSING_CHECKOUT, DAY_OFF }
 

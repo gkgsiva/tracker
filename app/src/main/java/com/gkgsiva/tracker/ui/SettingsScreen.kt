@@ -195,13 +195,27 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
                 settings.remindBreak,
             ) { setReminder(settings.copy(remindBreak = it)) }
             Stepper(
-                "Planned break alert",
+                "Break limit",
+                Duration.ofMinutes(settings.breakPlanMinutes.toLong()),
+                step = Duration.ofMinutes(5),
+                min = Duration.ofMinutes(5),
+                max = Duration.ofMinutes(90),
+            ) { setReminder(settings.copy(breakPlanMinutes = it.toMinutes().toInt())) }
+            Stepper(
+                "Extend by",
+                Duration.ofMinutes(settings.breakExtendMinutes.toLong()),
+                step = Duration.ofMinutes(1),
+                min = Duration.ofMinutes(1),
+                max = Duration.ofMinutes(30),
+            ) { setReminder(settings.copy(breakExtendMinutes = it.toMinutes().toInt())) }
+            Stepper(
+                "Alert before limit",
                 Duration.ofMinutes(settings.breakPlanLeadMinutes.toLong()),
                 step = Duration.ofMinutes(1),
                 min = Duration.ofMinutes(1),
                 max = Duration.ofMinutes(10),
             ) { setReminder(settings.copy(breakPlanLeadMinutes = it.toMinutes().toInt())) }
-            Hint("When you start a break you pick how long it will be. You're alerted this long before it ends, and again when it does.")
+            Hint("A break starts with no limit. Tap Set limit during a break to give it the break limit above, and Extend to add more. You're alerted shortly before the limit, and again when it's up.")
             SwitchRow(
                 "Month summary",
                 "On the 1st: days that met ${rules.requiredInside.formatShort()}, LOP, regularized and total hours for the month just ended",

@@ -72,8 +72,10 @@ data class Settings(
     val backupFolder: String? = null,
     /** Notify on the 1st with a summary of the month that just ended. */
     val monthSummary: Boolean = true,
-    /** Break length offered first when starting a break; null means no planned length. */
-    val breakPlanMinutes: Int? = 15,
+    /** The limit "Set limit" puts on a break in progress. */
+    val breakPlanMinutes: Int = 15,
+    /** How much "Extend" adds to a break's limit. */
+    val breakExtendMinutes: Int = 5,
     /** How long before a planned break ends to send the heads-up. */
     val breakPlanLeadMinutes: Int = 2,
 )

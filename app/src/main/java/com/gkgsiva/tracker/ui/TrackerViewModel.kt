@@ -9,6 +9,7 @@ import com.gkgsiva.tracker.data.AppDatabase
 import com.gkgsiva.tracker.data.DayEntity
 import com.gkgsiva.tracker.data.EditEntity
 import com.gkgsiva.tracker.data.PunchEntity
+import com.gkgsiva.tracker.domain.BreakLabel
 import com.gkgsiva.tracker.domain.BreakPlan
 import com.gkgsiva.tracker.domain.DayShape
 import com.gkgsiva.tracker.domain.DaySummary
@@ -79,7 +80,7 @@ class TrackerViewModel(app: Application) : AndroidViewModel(app) {
     fun saveDay(date: LocalDate, shape: DayShape, reason: String?) = logged(date, reason) {
         dao.deletePunchesFor(date.toEpochDay())
         dao.insertAll(
-            shape.toPunches().map { PunchEntity(epochDay = date.toEpochDay(), secondOfDay = it.time.toSecondOfDay(), isIn = it.isIn, isLogout = it.isLogout) }
+            shape.toPunches().map { PunchEntity(epochDay = date.toEpochDay(), secondOfDay = it.time.toSecondOfDay(), isIn = it.isIn, isLogout = it.isLogout, label = it.label) }
         )
     }
 
@@ -139,33 +140,58 @@ class TrackerViewModel(app: Application) : AndroidViewModel(app) {
         Tracker.punchNow(getApplication(), isIn, isLogout)
     }
 
-    /** Starts a break planned to last [minutes] (null for no plan), and offers that length first next time. */
-    fun startBreak(minutes: Int?) = viewModelScope.launch {
-        SettingsStore.save(getApplication(), settings.value.copy(breakPlanMinutes = minutes))
-        Tracker.punchNow(getApplication(), isIn = false, breakMinutes = minutes)
+    /** Puts a limit of [minutes] on the break in progress; null removes it. */
+    fun setBreakLimit(minutes: Int?) = viewModelScope.launch {
+        Tracker.setBreakLimit(getApplication(), minutes?.let { Duration.ofMinutes(it.toLong()) })
     }
 
-    /** Changes the length planned for the break in progress. */
-    fun replanBreak(plan: BreakPlan, minutes: Int?) = change {
-        BreakPlans.set(getApplication(), minutes?.let { plan.copy(length = Duration.ofMinutes(it.toLong())) })
+    /** Adds the Settings extend time to the break's limit. */
+    fun extendBreak() = viewModelScope.launch { Tracker.extendBreak(getApplication()) }
+
+    /** Changes what the break starting at [start] was for. */
+    fun setBreakLabel(start: PunchEntity, label: BreakLabel) = logged(start.date) {
+        dao.update(start.copy(label = label.name))
+    }
+
+    /** Saves a whole break at once: its label, start and (if it has ended) end. */
+    fun saveBreak(start: PunchEntity, end: PunchEntity?, label: BreakLabel, from: LocalTime, to: LocalTime?) = logged(start.date) {
+        dao.update(start.copy(secondOfDay = from.toSecondOfDay(), label = label.name))
+        if (end != null && to != null) dao.update(end.copy(secondOfDay = to.toSecondOfDay()))
+    }
+
+    /** Removes a break: its start, and its end if it has one. */
+    fun deleteBreak(start: PunchEntity, end: PunchEntity?) = logged(start.date) {
+        dao.delete(start)
+        end?.let { dao.delete(it) }
     }
 
     /** The plan for the break [s] is on, if any. */
     fun breakPlan(s: DaySummary): BreakPlan? = BreakPlans.current(getApplication(), s)
 
-    fun add(date: LocalDate, time: LocalTime, isIn: Boolean, isLogout: Boolean) = logged(date) {
+    /** Adds an entry; [label] applies only to a break start. */
+    fun add(date: LocalDate, time: LocalTime, isIn: Boolean, isLogout: Boolean, label: BreakLabel? = null) = logged(date) {
+        val breakStart = !isIn && !isLogout
         dao.insert(
             PunchEntity(
                 epochDay = date.toEpochDay(),
                 secondOfDay = time.toSecondOfDay(),
                 isIn = isIn,
                 isLogout = !isIn && isLogout,
+                label = if (breakStart) (label ?: BreakLabel.guess(time)).name else null,
             )
         )
     }
 
-    fun update(punch: PunchEntity, time: LocalTime, isIn: Boolean, isLogout: Boolean) = logged(punch.date) {
-        dao.update(punch.copy(secondOfDay = time.toSecondOfDay(), isIn = isIn, isLogout = !isIn && isLogout))
+    fun update(punch: PunchEntity, time: LocalTime, isIn: Boolean, isLogout: Boolean, label: BreakLabel? = null) = logged(punch.date) {
+        val breakStart = !isIn && !isLogout
+        dao.update(
+            punch.copy(
+                secondOfDay = time.toSecondOfDay(),
+                isIn = isIn,
+                isLogout = !isIn && isLogout,
+                label = if (breakStart) (label ?: BreakLabel.of(punch.label) ?: BreakLabel.guess(time)).name else null,
+            )
+        )
     }
 
     /** Turns the break you're on into the end of the day. */
