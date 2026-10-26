@@ -89,8 +89,8 @@ class TrackerWidget : AppWidgetProvider() {
                     s.dayOff -> "No login needed"
                     onBreak -> "break today · " + (plan?.let { "back at ${it.end.formatClock()}" }
                         ?: s.returnBy?.let { "back by ${it.formatClock()}" } ?: "over the allowance")
-                    s.expectedLeave != null -> "inside · leave at ${s.expectedLeave.formatClock()}"
-                    else -> "inside of ${s.rules.requiredInside.formatHm()}"
+                    s.expectedLeave != null -> "worked · leave at ${s.expectedLeave.formatClock()}"
+                    else -> "worked of ${s.rules.requiredInside.formatHm()}"
                 },
             )
 

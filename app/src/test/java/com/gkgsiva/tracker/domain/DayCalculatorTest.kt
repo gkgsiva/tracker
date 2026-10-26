@@ -22,7 +22,7 @@ class DayCalculatorTest {
     fun noPunchesIsNotStarted() {
         val s = DayCalculator.summarize(day, emptyList(), now = t(10, 0))
         assertEquals(DayStatus.NOT_STARTED, s.status)
-        assertEquals(Duration.ofHours(8), s.remaining)
+        assertEquals(Duration.ofHours(9), s.remaining) // 9h in office is the longer of the two
         assertFalse(s.worked)
     }
 
@@ -31,8 +31,8 @@ class DayCalculatorTest {
         val s = DayCalculator.summarize(day, listOf(inAt(8, 30)), now = t(10, 0))
         assertEquals(DayStatus.INSIDE, s.status)
         assertEquals(Duration.ofMinutes(90), s.inside)
-        assertEquals(Duration.ofMinutes(390), s.remaining)
-        assertEquals(t(17, 0), s.expectedLeave) // 10:00 + 6.5h = 16:30, but 5 PM rule wins
+        assertEquals(Duration.ofMinutes(450), s.remaining)
+        assertEquals(t(17, 30), s.expectedLeave) // 6.5h more work ends 16:30, but 9h in office ends 17:30
         assertFalse(s.lateArrival)
     }
 
@@ -45,7 +45,8 @@ class DayCalculatorTest {
         assertEquals(2, s.breakCount)
         assertEquals(Duration.ofMinutes(210 + 140 + 50), s.inside)
         assertEquals(Duration.ofMinutes(10), s.breakLeft)
-        assertEquals(t(17, 20), s.expectedLeave)
+        // 8h of work would be done at 17:20, but 9h in office from 8:30 is 17:30.
+        assertEquals(t(17, 30), s.expectedLeave)
     }
 
     @Test
@@ -54,10 +55,10 @@ class DayCalculatorTest {
         val s = DayCalculator.summarize(day, punches, now = t(12, 20))
         assertEquals(DayStatus.ON_BREAK, s.status)
         assertEquals(Duration.ofMinutes(20), s.breaks)
-        // Logged in at 8:00, so 1h30m of break still lets you leave by 5:30.
-        assertEquals(Duration.ofMinutes(90), s.breakAllowance)
-        assertEquals(t(13, 30), s.returnBy)
-        assertEquals(Duration.ofHours(4), s.remaining)
+        // 9h in office from 8:00 minus 8h of work leaves 1h of break.
+        assertEquals(Duration.ofMinutes(60), s.breakAllowance)
+        assertEquals(t(13, 0), s.returnBy)
+        assertEquals(Duration.ofHours(4), s.inside)
     }
 
     @Test
@@ -65,7 +66,7 @@ class DayCalculatorTest {
         val punches = listOf(inAt(8, 0), outAt(12, 0))
         val s = DayCalculator.summarize(day, punches, now = t(13, 45))
         assertTrue(s.breakExceeded)
-        assertEquals(Duration.ofMinutes(-15), s.breakLeft)
+        assertEquals(Duration.ofMinutes(-45), s.breakLeft)
         assertNull(s.returnBy)
     }
 
@@ -74,9 +75,10 @@ class DayCalculatorTest {
         val rules = Rules()
         assertEquals(Duration.ofHours(1), rules.breakAllowance(null))
         assertEquals(Duration.ofHours(1), rules.breakAllowance(t(8, 30)))
-        assertEquals(Duration.ofMinutes(90), rules.breakAllowance(t(8, 0)))
-        assertEquals(Duration.ofMinutes(30), rules.breakAllowance(t(9, 0)))
-        assertEquals(Duration.ZERO, rules.breakAllowance(t(9, 45)))
+        assertEquals(Duration.ofHours(1), rules.breakAllowance(t(8, 0)))
+        // Before 8:00, 5 PM comes later than login + 9h, so there's more room.
+        assertEquals(Duration.ofMinutes(90), rules.breakAllowance(t(7, 30)))
+        assertEquals(Duration.ofHours(1), rules.breakAllowance(t(9, 0)))
     }
 
     @Test
@@ -90,7 +92,7 @@ class DayCalculatorTest {
 
     @Test
     fun regularizedDayKeepsReasonsButIsNotLop() {
-        val punches = listOf(inAt(9, 12), logoutAt(17, 45))
+        val punches = listOf(inAt(9, 12), logoutAt(18, 15))
         val lop = DayCalculator.summarize(day, punches, now = null)
         assertTrue(lop.lop)
         val s = DayCalculator.summarize(day, punches, now = null, regularized = "Manager approved")
@@ -143,7 +145,7 @@ class DayCalculatorTest {
 
     @Test
     fun earlyLogoutIsLopLive() {
-        val s = DayCalculator.summarize(day, listOf(inAt(8, 0), logoutAt(16, 30)), now = t(16, 45))
+        val s = DayCalculator.summarize(day, listOf(inAt(7, 30), logoutAt(16, 30)), now = t(16, 45))
         assertEquals(DayStatus.DONE, s.status)
         assertEquals(listOf(LopReason.EARLY_EXIT), s.lopReasons)
     }
@@ -197,9 +199,9 @@ class DayCalculatorTest {
 
     @Test
     fun wfhUsesOnlyFirstLoginAndLastLogout() {
-        val punches = listOf(inAt(8, 30), outAt(12, 0), inAt(13, 0), logoutAt(17, 0))
+        val punches = listOf(inAt(8, 30), outAt(12, 0), inAt(13, 0), logoutAt(17, 30))
         val s = DayCalculator.summarize(day, punches, now = null, type = DayType.WFH)
-        assertEquals(Duration.ofMinutes(510), s.inside)
+        assertEquals(Duration.ofMinutes(540), s.inside)
         assertEquals(Duration.ZERO, s.breaks)
         assertEquals(0, s.breakCount)
         assertFalse(s.lop)
@@ -254,16 +256,16 @@ class DayCalculatorTest {
 
     @Test
     fun customRulesAreUsed() {
-        val rules = Rules(arriveBy = t(9, 30), leaveAfter = t(18, 0), requiredInside = Duration.ofMinutes(510))
+        val rules = Rules(arriveBy = t(9, 30), leaveAfter = t(18, 0), requiredInside = Duration.ofMinutes(510), requiredPresent = Duration.ofMinutes(510))
         val s = DayCalculator.summarize(day, listOf(inAt(9, 20), logoutAt(18, 0)), null, rules)
         assertFalse(s.lop)
         val short = DayCalculator.summarize(day, listOf(inAt(9, 20), logoutAt(17, 45)), null, rules)
-        assertEquals(listOf(LopReason.EARLY_EXIT, LopReason.UNDER_8H), short.lopReasons)
+        assertEquals(listOf(LopReason.EARLY_EXIT, LopReason.SHORT_WORK), short.lopReasons)
     }
 
     @Test
     fun onTimeFullDayIsNotLop() {
-        val s = DayCalculator.summarize(day, listOf(inAt(8, 30), outAt(13, 0), inAt(13, 30), outAt(17, 5)), null)
+        val s = DayCalculator.summarize(day, listOf(inAt(8, 30), outAt(13, 0), inAt(13, 30), outAt(17, 30)), null)
         assertFalse(s.lop)
     }
 
@@ -284,7 +286,8 @@ class DayCalculatorTest {
     @Test
     fun under8HoursIsLopEvenWhenOnTime() {
         val s = DayCalculator.summarize(day, listOf(inAt(8, 55), outAt(12, 0), inAt(13, 30), outAt(17, 0)), null)
-        assertEquals(listOf(LopReason.UNDER_8H), s.lopReasons)
+        // 6h35m of work and 8h05m in the office: both rules missed, and both named.
+        assertEquals(listOf(LopReason.SHORT_WORK, LopReason.SHORT_PRESENT), s.lopReasons)
     }
 
     @Test
@@ -300,18 +303,20 @@ class DayCalculatorTest {
         assertTrue(s.targetMet)
         assertFalse(s.lop)
         val short = DayCalculator.summarize(day, listOf(inAt(9, 30), logoutAt(13, 0)), null, type = DayType.HALF_DAY)
-        assertEquals(listOf(LopReason.UNDER_8H), short.lopReasons)
+        assertEquals(listOf(LopReason.SHORT_WORK), short.lopReasons)
         assertEquals(Duration.ofHours(4), short.rules.requiredInside)
     }
 
     @Test
     fun shortLeaveEasesCoreHoursAndHours() {
-        // 2h short leave: 6h inside, log in by 11:00, leave after 15:00.
-        val late = DayCalculator.summarize(day, listOf(inAt(10, 45), logoutAt(17, 0)), null, type = DayType.SHORT_LEAVE)
+        // 2h short leave: 6h of work, 7h in office, log in by 11:00, leave after 15:00.
+        val late = DayCalculator.summarize(day, listOf(inAt(10, 45), logoutAt(17, 45)), null, type = DayType.SHORT_LEAVE)
         assertFalse(late.lop)
-        val early = DayCalculator.summarize(day, listOf(inAt(8, 30), logoutAt(15, 0)), null, type = DayType.SHORT_LEAVE)
+        val early = DayCalculator.summarize(day, listOf(inAt(8, 0), logoutAt(15, 0)), null, type = DayType.SHORT_LEAVE)
         assertFalse(early.lop)
-        val tooLate = DayCalculator.summarize(day, listOf(inAt(11, 5), logoutAt(18, 0)), null, type = DayType.SHORT_LEAVE)
+        val leftAt5 = DayCalculator.summarize(day, listOf(inAt(10, 45), logoutAt(17, 0)), null, type = DayType.SHORT_LEAVE)
+        assertEquals(listOf(LopReason.SHORT_PRESENT), leftAt5.lopReasons)
+        val tooLate = DayCalculator.summarize(day, listOf(inAt(11, 5), logoutAt(18, 30)), null, type = DayType.SHORT_LEAVE)
         assertEquals(listOf(LopReason.LATE_LOGIN), tooLate.lopReasons)
         assertEquals(Duration.ofHours(1), early.breakAllowance)
     }
@@ -334,7 +339,7 @@ class DayCalculatorTest {
         val jan = LocalDate.of(2026, 1, 5)
         val days = mapOf(
             jan to DayCalculator.summarize(jan, listOf(inAt(8, 30), logoutAt(17, 30)), null),
-            jan.plusDays(1) to DayCalculator.summarize(jan.plusDays(1), listOf(inAt(9, 30), logoutAt(18, 0)), null, regularized = ""),
+            jan.plusDays(1) to DayCalculator.summarize(jan.plusDays(1), listOf(inAt(9, 30), logoutAt(18, 30)), null, regularized = ""),
             jan.plusDays(2) to DayCalculator.summarize(jan.plusDays(2), emptyList(), null, type = DayType.LEAVE),
             jan.plusDays(3) to DayCalculator.summarize(jan.plusDays(3), listOf(inAt(13, 0), logoutAt(17, 0)), null, type = DayType.HALF_DAY),
         )
@@ -347,5 +352,32 @@ class DayCalculatorTest {
         assertEquals(1, j.leaveDays)
         assertEquals(1, j.halfDays)
         assertEquals(0, year[1].daysWorked)
+    }
+
+    @Test
+    fun leaveTimeIsLoginPlusNineHoursNotFivePm() {
+        // Siva's day: in at 8:18, 33m of break so far. 5 PM would leave only 8h42m in the office.
+        val s = DayCalculator.summarize(day, listOf(inAt(8, 18), outAt(10, 0), inAt(10, 20), outAt(11, 0), inAt(11, 13)), now = t(11, 42))
+        assertEquals(Duration.ofMinutes(33), s.breaks)
+        assertEquals(t(17, 18), s.expectedLeave)
+        assertEquals(Duration.ofMinutes(9 * 60 - 204), s.remaining)
+        val leftAt5 = DayCalculator.summarize(day, listOf(inAt(8, 18), outAt(12, 0), inAt(12, 30), logoutAt(17, 0)), null)
+        assertTrue(leftAt5.workMet)
+        assertEquals(listOf(LopReason.SHORT_PRESENT), leftAt5.lopReasons)
+    }
+
+    @Test
+    fun longerBreakPushesLeaveTimeByWorkHours() {
+        // 1h30m of break: 8h of work needs until 17:48, later than login + 9h.
+        val s = DayCalculator.summarize(day, listOf(inAt(8, 18), outAt(12, 0), inAt(13, 30)), now = t(14, 0))
+        assertEquals(t(17, 48), s.expectedLeave)
+    }
+
+    @Test
+    fun wfhNeedsNineHoursToo() {
+        val short = DayCalculator.summarize(day, listOf(inAt(8, 30), logoutAt(17, 0)), null, type = DayType.WFH)
+        assertEquals(listOf(LopReason.SHORT_PRESENT), short.lopReasons)
+        val full = DayCalculator.summarize(day, listOf(inAt(8, 30), logoutAt(17, 30)), null, type = DayType.WFH)
+        assertFalse(full.lop)
     }
 }

@@ -94,20 +94,27 @@ fun SettingsScreen(settings: Settings, vm: TrackerViewModel) {
     ) {
         Section("Office rules") {
             Hint("Core hours: logging in after this or leaving before this is LOP.")
-            TimeSetting.entries.take(2).forEach { SettingRow(it.label, it.get(rules).formatClock(), onClick = { editingTime = it }) }
+            TimeSetting.entries.forEach { SettingRow(it.label, it.get(rules).formatClock(), onClick = { editingTime = it }) }
             Stepper(
-                "Hours inside",
+                "Work hours (no breaks)",
                 rules.requiredInside,
                 step = Duration.ofMinutes(30),
                 min = Duration.ofHours(1),
                 max = Duration.ofHours(12),
             ) { update(settings.copy(rules = rules.copy(requiredInside = it))) }
+            Stepper(
+                "In office (with breaks)",
+                rules.requiredPresent,
+                step = Duration.ofMinutes(30),
+                min = rules.requiredInside,
+                max = Duration.ofHours(14),
+            ) { update(settings.copy(rules = rules.copy(requiredPresent = it))) }
             Hint(
-                "Official hours set your break: from login to ${rules.officeEnd.formatClock()}, minus " +
-                    "${rules.requiredInside.formatShort()}. Logging in at ${rules.officeStart.formatClock()} gives " +
-                    "${rules.breakAllowance(null).formatShort()}, earlier gives more. A longer break isn't LOP; you just stay later."
+                "Each day needs ${rules.requiredInside.formatShort()} of work not counting breaks, and " +
+                    "${rules.requiredPresent.formatShort()} from login to logout counting them, so you can take " +
+                    "${rules.breakAllowance(null).formatShort()} of break and still leave at login + ${rules.requiredPresent.formatShort()}. " +
+                    "Missing either is LOP; a longer break just means staying later."
             )
-            TimeSetting.entries.drop(2).forEach { SettingRow(it.label, it.get(rules).formatClock(), onClick = { editingTime = it }) }
         }
 
         Section("Half day and short leave") {
@@ -292,8 +299,6 @@ private val backupDate = DateTimeFormatter.ofPattern("d MMM")
 private enum class TimeSetting(val label: String, val get: (Rules) -> LocalTime, val set: (Rules, LocalTime) -> Rules) {
     ARRIVE("Log in by", { it.arriveBy }, { r, t -> r.copy(arriveBy = t) }),
     LEAVE("Leave after", { it.leaveAfter }, { r, t -> r.copy(leaveAfter = t) }),
-    OFFICE_START("Official start", { it.officeStart }, { r, t -> r.copy(officeStart = t) }),
-    OFFICE_END("Official end", { it.officeEnd }, { r, t -> r.copy(officeEnd = t) }),
 }
 
 @Composable

@@ -84,23 +84,48 @@ private val dateFormat = DateTimeFormatter.ofPattern("EEE, d MMM yyyy")
 private val shortDateFormat = DateTimeFormatter.ofPattern("EEE, d MMM")
 
 /** What a punch means to the user. Stored as isIn + isLogout. */
+/** Login and Break end are both check-ins; they differ only in where they sit in the day. */
 private enum class EntryKind(val label: String, val isIn: Boolean, val isLogout: Boolean) {
-    IN("Login / break end", true, false),
+    IN("Login", true, false),
     BREAK("Break start", false, false),
+    BREAK_END("Break end", true, false),
     LOGOUT("Logout", false, true),
 }
 
-private val PunchEntity.kind: EntryKind
-    get() = when {
-        isIn -> EntryKind.IN
-        isLogout -> EntryKind.LOGOUT
-        else -> EntryKind.BREAK
-    }
+/** The kind of [this] among [day]'s entries: a check-in after an earlier one is a break end. */
+private fun PunchEntity.kindIn(day: List<PunchEntity>): EntryKind = when {
+    isIn -> if (day.any { it.isIn && it.secondOfDay < secondOfDay }) EntryKind.BREAK_END else EntryKind.IN
+    isLogout -> EntryKind.LOGOUT
+    else -> EntryKind.BREAK
+}
 
-private fun PunchEntity.label(isFirst: Boolean): String = when (kind) {
-    EntryKind.IN -> if (isFirst) "Login" else "Break end"
-    EntryKind.BREAK -> "Break start"
-    EntryKind.LOGOUT -> "Logout"
+/**
+ * Why an entry of [kind] at [time] doesn't fit [others] (the day's other entries), or null.
+ * The same checks the day's calculation flags as issues, shown before saving.
+ */
+private fun entryProblem(kind: EntryKind, time: LocalTime, others: List<PunchEntity>): String? {
+    val before = others.filter { it.time < time }.maxByOrNull { it.secondOfDay }
+    val after = others.filter { it.time > time }.minByOrNull { it.secondOfDay }
+    return when (kind) {
+        EntryKind.IN -> if (others.any { it.isIn && it.time < time }) "There's already a login earlier; this would be a break end." else null
+        EntryKind.BREAK_END -> when {
+            before == null -> "Nothing before this time; use Login for the first entry."
+            before.isIn -> "The entry before (${before.time.formatClock()}) isn't a break start."
+            after != null && after.isIn -> "The next entry (${after.time.formatClock()}) is also a check-in."
+            else -> null
+        }
+        EntryKind.BREAK, EntryKind.LOGOUT -> when {
+            before == null -> "There's no login before this time."
+            !before.isIn -> "The entry before (${before.time.formatClock()}) is already a check-out."
+            else -> null
+        }
+    }
+}
+
+private fun PunchEntity.label(isFirst: Boolean): String = when {
+    isIn -> if (isFirst) "Login" else "Break end"
+    isLogout -> "Logout"
+    else -> "Break start"
 }
 
 @Composable
@@ -222,7 +247,7 @@ fun TodayScreen(
         }
 
         if (!summary.dayOff && !isFuture) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile(if (wfh) "Worked" else "Inside", summary.inside.formatHm(), Modifier.weight(1f))
+            StatTile("Worked", summary.inside.formatHm(), Modifier.weight(1f), sub = "of ${summary.rules.requiredInside.formatShort()}, no breaks")
             if (!wfh) {
                 StatTile(
                     "Break",
@@ -232,7 +257,14 @@ fun TodayScreen(
                     else "${summary.breakLeft.formatHm()} of ${summary.breakAllowance.formatShort()} left",
                 )
             }
-            StatTile("To go", summary.remaining.formatHm(), Modifier.weight(1f), sub = "of ${summary.rules.requiredInside.formatShort()}")
+            // Until every rule is met: the work hours, the in-office hours and the leave-after time.
+            val untilLeave = summary.expectedLeave?.let { Duration.between(now.toLocalTime(), it).coerceAtLeast(Duration.ZERO) }
+            StatTile(
+                "To go",
+                (untilLeave ?: summary.remaining).formatHm(),
+                Modifier.weight(1f),
+                sub = summary.expectedLeave?.let { "leave at ${it.formatClock()}" } ?: Outlook.hoursOf(summary.rules),
+            )
         }
 
         LopCard(summary, onRegularize = { note -> vm.setRegularized(date, summary.type, note) })
@@ -286,8 +318,8 @@ fun TodayScreen(
     if (editingDay) {
         DayEditorDialog(
             initial = DayShape.of(punches.map { it.toPunch() }),
-            defaultLogin = rules.officeStart,
-            defaultLogout = rules.officeEnd,
+            defaultLogin = rules.arriveBy,
+            defaultLogout = rules.arriveBy.plus(rules.requiredPresent),
             onDismiss = { editingDay = false },
             onSave = { shape, reason -> vm.saveDay(date, shape, reason); editingDay = false },
         )
@@ -318,14 +350,16 @@ fun TodayScreen(
             title = "Add entry",
             initialTime = when {
                 isToday -> now.toLocalTime()
-                last?.isIn == true -> rules.officeEnd
+                last?.isIn == true -> maxOf(rules.leaveAfter, (summary.firstIn ?: rules.arriveBy).plus(summary.rules.requiredPresent))
                 else -> rules.arriveBy
             },
             initialKind = when {
-                last == null || !last.isIn -> EntryKind.IN
+                last == null -> EntryKind.IN
+                !last.isIn -> if (wfh) EntryKind.IN else EntryKind.BREAK_END
                 isToday && !wfh -> EntryKind.BREAK
                 else -> EntryKind.LOGOUT
             },
+            others = punches,
             wfh = wfh,
             onDismiss = { adding = false },
             onConfirm = { time, kind -> vm.add(date, time, kind.isIn, kind.isLogout); adding = false },
@@ -344,7 +378,8 @@ fun TodayScreen(
         PunchDialog(
             title = "Edit entry",
             initialTime = p.time,
-            initialKind = p.kind,
+            initialKind = p.kindIn(punches),
+            others = punches - p,
             wfh = wfh,
             onDismiss = { editing = null },
             onConfirm = { time, kind -> vm.update(p, time, kind.isIn, kind.isLogout); editing = null },
@@ -367,7 +402,8 @@ fun TodayScreen(
                         append("Logging out now will make today LOP")
                         val reasons = buildList {
                             if (now.toLocalTime() < summary.rules.leaveAfter) add("it's before ${summary.rules.leaveAfter.formatClock()}")
-                            if (!summary.targetMet) add("you still need ${summary.remaining.formatHm()} inside")
+                            if (!summary.workMet) add("you've worked ${summary.inside.formatHm()} of ${summary.rules.requiredInside.formatShort()}")
+                            if (!summary.presentMet) add("you've been in the office ${summary.present.formatHm()} of ${summary.rules.requiredPresent.formatShort()}")
                         }
                         append(": ").append(reasons.joinToString(" and ")).append('.')
                     }
@@ -772,7 +808,9 @@ private fun OutlookCard(forecast: Forecast?, month: Outlook) {
                 )
             }
             DetailLine("LOP days this month", "${month.lopDays}", warn = month.lopDays > 0)
-            DetailLine("This month", listOfNotNull("${month.done.formatHm()} clocked", month.metText()).joinToString(" · "))
+            // Label above the line, so long figures wrap as a whole instead of squeezing the label.
+            Text("This month", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(listOfNotNull("${month.done.formatHm()} worked", month.metText()).joinToString(" · "))
             Text(month.paceText(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -800,7 +838,12 @@ private fun DetailsCard(s: DaySummary) {
                 warn = s.lateArrival,
             )
             if (!s.wfh) DetailLine("Breaks taken", "${s.breakCount}")
-            s.returnBy?.let { DetailLine("Back by (to leave by ${s.rules.officeEnd.formatClock()})", it.formatClock()) }
+            if (!s.wfh) DetailLine(
+                "In office (with breaks)",
+                "${s.present.formatHm()} of ${s.rules.requiredPresent.formatShort()}",
+                warn = s.finished && !s.presentMet,
+            )
+            s.returnBy?.let { DetailLine("Back from break by", it.formatClock()) }
             s.expectedLeave?.let { DetailLine("You can leave at", it.formatClock()) }
             if (s.status == DayStatus.DONE && s.lastOut != null) {
                 DetailLine(
@@ -835,10 +878,10 @@ private fun PunchRow(p: PunchEntity, isFirst: Boolean, onEdit: () -> Unit, onDel
         Text(
             p.label(isFirst),
             Modifier.weight(1f),
-            color = when (p.kind) {
-                EntryKind.IN -> MaterialTheme.colorScheme.primary
-                EntryKind.BREAK -> MaterialTheme.colorScheme.tertiary
-                EntryKind.LOGOUT -> MaterialTheme.colorScheme.onSurface
+            color = when {
+                p.isIn -> MaterialTheme.colorScheme.primary
+                p.isLogout -> MaterialTheme.colorScheme.onSurface
+                else -> MaterialTheme.colorScheme.tertiary
             },
         )
         IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit") }
@@ -852,6 +895,7 @@ private fun PunchDialog(
     title: String,
     initialTime: LocalTime,
     initialKind: EntryKind,
+    others: List<PunchEntity>,
     wfh: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (LocalTime, EntryKind) -> Unit,
@@ -864,11 +908,11 @@ private fun PunchDialog(
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 // Two per row so the labels have room at any text size.
-                EntryKind.entries.filter { !wfh || it != EntryKind.BREAK }.chunked(2).forEach { row ->
+                EntryKind.entries.filter { !wfh || (it != EntryKind.BREAK && it != EntryKind.BREAK_END) }.chunked(2).forEach { row ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         row.forEach { k ->
                             ChoiceChip(
-                                if (k == EntryKind.IN) "In" else k.label,
+                                k.label,
                                 selected = kind == k,
                                 onClick = { kind = k },
                                 Modifier.weight(1f),
@@ -879,6 +923,9 @@ private fun PunchDialog(
                 }
                 Spacer(Modifier.height(12.dp))
                 TimePicker(state = state)
+                entryProblem(kind, LocalTime.of(state.hour, state.minute), others)?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
             }
         },
         confirmButton = {

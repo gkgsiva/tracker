@@ -186,7 +186,7 @@ private fun TargetsCard(week: Outlook, month: Outlook, required: Duration) {
                 }
             }
             Text(
-                "Every working day needs ${required.formatShort()} inside on its own; extra hours on one day don't make up " +
+                "Every working day needs ${required.formatShort()} of work and its office time on its own; extra hours on one day don't make up " +
                     "for another. Planned leave, holidays and weekly offs aren't counted.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -237,7 +237,7 @@ private fun DailyView(
     ChartCard(
         target = target,
         title = "Last $DAYS_SHOWN days",
-        subtitle = "Hours inside office per day",
+        subtitle = "Work hours per day (bars stack work and break)",
         showLop = true,
         bars = dates.map { d ->
             val s = summaries[d]
@@ -270,7 +270,7 @@ private fun PeriodView(
     ChartCard(
         target = target,
         title = "Average per working day",
-        subtitle = "Hours inside office",
+        subtitle = "Work hours, breaks not counted",
         bars = periods.map { Bar(barLabel(it), it.avgInside.hours(), it.avgBreaks.hours()) },
     )
     periods.lastOrNull()?.let { TotalsCard(rowLabel(it), it) }
@@ -282,7 +282,7 @@ private fun PeriodView(
                     Text(rowLabel(p), fontWeight = FontWeight.Medium)
                     Text(
                         if (p.daysWorked == 0) "No days logged"
-                        else "${p.daysWorked} days · ${p.wfhDays} WFH · ${p.lopDays} LOP · ${p.holidays} holiday · ${p.leaveDays} leave · ${p.totalInside.formatHm()} inside · avg ${p.avgInside.formatHm()} · avg break ${p.avgBreaks.formatHm()}",
+                        else "${p.daysWorked} days · ${p.wfhDays} WFH · ${p.lopDays} LOP · ${p.holidays} holiday · ${p.leaveDays} leave · ${p.totalInside.formatHm()} worked · avg ${p.avgInside.formatHm()} · avg break ${p.avgBreaks.formatHm()}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -459,7 +459,7 @@ private fun YearView(summaries: Map<LocalDate, DaySummary>, today: LocalDate) {
             YearRow("Total", months.map(::cells).reduce { a, b -> a.zip(b) { x, y -> x + y } }.map { "$it" }, bold = true, lop = true)
             Text(
                 "Met: working days that reached the required hours. Reg.: regularized. ½ / SL: half days and short leave. " +
-                    "Total inside this year: ${months.fold(Duration.ZERO) { acc, p -> acc + p.totalInside }.formatHm()}.",
+                    "Total worked this year: ${months.fold(Duration.ZERO) { acc, p -> acc + p.totalInside }.formatHm()}.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
