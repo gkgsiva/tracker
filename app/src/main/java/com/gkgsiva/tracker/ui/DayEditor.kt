@@ -152,24 +152,32 @@ internal fun TimePickDialog(initial: LocalTime, onDismiss: () -> Unit, onPick: (
 
 private val editTime = DateTimeFormatter.ofPattern("d MMM, h:mm a")
 
-/** Changes made to this day by hand, newest first. */
+/** A button that opens the changes made to this day by hand, newest first; nothing when there are none. */
 @Composable
-fun ChangesCard(edits: List<EditEntity>) {
+fun ChangesButton(edits: List<EditEntity>) {
     if (edits.isEmpty()) return
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Changes", style = MaterialTheme.typography.titleMedium)
-            edits.asReversed().forEach { e ->
-                Column {
-                    Text(e.change.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodyMedium)
-                    val at = Instant.ofEpochMilli(e.atMillis).atZone(ZoneId.systemDefault()).format(editTime)
-                    Text(
-                        listOfNotNull(at, e.reason).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+    var open by remember { mutableStateOf(false) }
+    TextButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
+        Text(if (edits.size == 1) "View 1 change" else "View ${edits.size} changes")
+    }
+    if (open) AlertDialog(
+        onDismissRequest = { open = false },
+        title = { Text("Changes") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                edits.asReversed().forEach { e ->
+                    Column {
+                        Text(e.change.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodyMedium)
+                        val at = Instant.ofEpochMilli(e.atMillis).atZone(ZoneId.systemDefault()).format(editTime)
+                        Text(
+                            listOfNotNull(at, e.reason).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
-        }
-    }
+        },
+        confirmButton = { TextButton(onClick = { open = false }) { Text("Close") } },
+    )
 }

@@ -44,7 +44,7 @@ if a recent day has no logout, Today (and the morning login reminder) asks for t
 Long-press a day on the calendar to set its type (plan leave, holidays, half days or short leave ahead).
 
 **Edit day** on any day opens login, every break and logout in one form, with an optional reason. Every
-change made by hand (there or entry by entry) is written to the day's **Changes** list, e.g. "login 9:05 AM
+change made by hand (there or entry by entry) is written to the day's change list (behind **View changes**), e.g. "login 9:05 AM
 → 8:55 AM · forgot to swipe". History lists every **regularized** day with its reason, note and the date it
 was regularized, and can share that list.
 

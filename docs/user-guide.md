@@ -1,7 +1,7 @@
 # Office Tracker user guide
 
 Office Tracker records when you arrive, take breaks and leave, and tells you live whether today
-meets the office rules. This guide covers **version 1.12**. Your version is shown at the bottom of
+meets the office rules. This guide covers **version 1.13**. Your version is shown at the bottom of
 **Settings**.
 
 The screenshots come from the real app running on an Android emulator with demo data, with the
@@ -143,6 +143,8 @@ Scroll down for the details:
   and the logout time once you've left.
 - **Entries**: the day's login, each break on one line (what it was for, start, end and how long;
   the end shows "–" while the break is still going) and the logout. Tap a line or its pencil to edit it.
+  Entries are kept to the second but shown to the minute, so a break's length is shown to the second
+  too: a break shown as 4:58 to 5:00 may really be 4:58:40 to 5:00:20, which is **1m 40s**.
 
 ![Entries list](screenshots/today-entries.png)
 
@@ -214,8 +216,8 @@ or the logout. Add a reason if you like (for example "forgot to log the break") 
 times don't line up, such as a break that ends before it starts, the form says what's wrong and Save
 stays off until it's fixed.
 
-**Changes.** Every change you make by hand, in Edit day or entry by entry, is written to a **Changes**
-list at the bottom of that day, newest first, for example "Login 9:05 AM → 8:55 AM" with when you made it
+**Changes.** Every change you make by hand, in Edit day or entry by entry, is kept in that day's
+change list. It stays out of the way: tap **View changes** at the bottom of the day to see it, newest first, for example "Login 9:05 AM → 8:55 AM" with when you made it
 and your reason. It is part of the backup.
 
 | Edit day | Changes list |

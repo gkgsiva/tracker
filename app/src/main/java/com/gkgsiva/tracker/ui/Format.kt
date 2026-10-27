@@ -18,6 +18,19 @@ fun Duration.formatHm(): String {
     return "%s%dh %02dm".format(sign, totalMin / 60, totalMin % 60)
 }
 
+/**
+ * A single break's length to the second, "1m 40s" or "45m", or "1h 05m" from an hour up. Entries are
+ * kept to the second, so a break shown as 4:58 to 5:00 can be anything from just over 1 to just under 3 minutes.
+ */
+fun Duration.formatBreak(): String {
+    val s = abs(seconds)
+    return when {
+        s >= 3600 -> formatHm()
+        s % 60 == 0L -> "${s / 60}m"
+        else -> "${s / 60}m ${s % 60}s"
+    }
+}
+
 /** "8h", "8h 30m" or "45m", for rule values. */
 fun Duration.formatShort(): String {
     val h = toMinutes() / 60
