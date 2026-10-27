@@ -63,7 +63,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.gkgsiva.tracker.data.PunchEntity
 import com.gkgsiva.tracker.domain.BreakLabel
@@ -326,7 +325,7 @@ fun TodayScreen(
                                 MaterialTheme.colorScheme.tertiary,
                                 row.start.time,
                                 end = row.end?.time?.formatClock() ?: "–",
-                                total = endAt?.let { Duration.between(row.start.time, it).coerceAtLeast(Duration.ZERO).formatHm() } ?: "–",
+                                total = endAt?.let { Duration.between(row.start.time, it).coerceAtLeast(Duration.ZERO).formatBreak() } ?: "–",
                             ) { editingBreak = row }
                         }
                     }
@@ -334,7 +333,7 @@ fun TodayScreen(
             }
         }
 
-        ChangesCard(edits[date].orEmpty())
+        ChangesButton(edits[date].orEmpty())
     }
 
     if (editingDay) {
@@ -913,9 +912,14 @@ private fun EntryLine(
 ) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Cell(label, 1.2f, color)
-        Cell(start.formatClock(), 1f, bold = true)
-        Cell(end, 1f, bold = true)
-        Cell(total, 1f, align = TextAlign.End)
+        if (end.isEmpty() && total.isEmpty()) {
+            // A login or logout has only a time, so it gets the rest of the line.
+            Cell(start.formatClock(), 3f, bold = true)
+        } else {
+            Cell(start.formatClock(), 1f, bold = true)
+            Cell(end, 1f, bold = true)
+            Cell(total, 1f, align = TextAlign.End)
+        }
         IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit $label") }
     }
 }
@@ -927,9 +931,8 @@ private fun RowScope.Cell(text: String, weight: Float, color: Color = Color.Unsp
     color = color,
     textAlign = align,
     fontWeight = if (bold) FontWeight.Medium else null,
-    maxLines = 1,
-    softWrap = false,
-    overflow = TextOverflow.Ellipsis,
+    // Wraps at large text sizes rather than cutting a time off.
+    maxLines = 2,
 )
 
 /** Edits a whole break: what it was for, when it started and (once over) when it ended. */
